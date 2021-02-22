@@ -63,9 +63,13 @@ FieldProvider FccPhaseProvider::generateInitialCondition(int gridSize) {
     gridSizes,
     dqVec,
     real,
-    m_phaseDimension};
+    m_phaseID};
 
   fftw_free(data);
 
   return initialCondition;
+}
+
+void FccPhaseProvider::resetCondition(FieldProvider field)
+{
 }

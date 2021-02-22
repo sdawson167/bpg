@@ -34,9 +34,8 @@ private:
     double *m_dx;   // array of real grid cell spacing - length is m_d
     double *m_dq;   // array of cplx grid cell spacing - length is m_d
     // Note about grid spacings: they must be packed in this order (3D): (dz, dy, dx) or (2D): (dy, dx)
-
-    int m_phaseDimension;           // identifies number of independent dimensions of phase (for box size optimization)
-                                    //    number must be less than m_d
+    
+    int m_phaseID;	// field knows which phase it's initialized to - used for reset
 
     void updateDq() {
       for (int d = 0; d < m_dimension; d++) m_dq[d] = 2 * M_PI / (m_dx[d] * m_gridSizes[d]);
@@ -83,7 +82,7 @@ public:
       int* gridSizes,
       double* dr,
       const bool real,
-      const int phaseDimension);
+      int phaseId);
 
     // constructor to initialize FieldProvider from data stored in file
     FieldProvider(std::string fileName);
@@ -133,9 +132,8 @@ public:
       updateDx();
     }
 
-    // get/set phase dimension (equal to no. of independent directions during grid optimization)
-    int getPhaseDimension() { return m_phaseDimension;}
-    void setPhaseDimension(int phaseDimension) { m_phaseDimension = phaseDimension; }
+    // get phase ID
+    int getPhaseID() { return m_phaseID; }
 
     /*
      * =====================================
@@ -154,13 +152,11 @@ public:
     void transformR2C() {
       memcpy(m_realTemp, m_realData, sizeof(fftw_complex) * m_numFieldElements);
       fftw_execute(m_fieldPlanR2C); 
-      /*
       for (int index = 0; index < m_numFieldElements; index++)
       {
         m_cplxData[index][0] /= m_numFieldElements;
 	m_cplxData[index][1] /= m_numFieldElements;
       }
-      */
     }
     void transformC2R() {
       memcpy(m_cplxTemp, m_cplxData, sizeof(fftw_complex) * m_numFieldElements);

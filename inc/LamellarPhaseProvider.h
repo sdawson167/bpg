@@ -15,7 +15,7 @@ private:
     double m_amplitude;
 
     const int m_dimension = 1;
-    const int m_phaseDimension = 1;
+    const int m_phaseID = 1;
 
 public:
     LamellarPhaseProvider(double period, double avDensity, double amplitude)
@@ -47,5 +47,11 @@ public:
      */
     FieldProvider generateInitialCondition(int gridSize);
 
+    /*                                             
+     * ======================================
+     *	       reset field provider
+     * ======================================
+     */
+    void resetCondition(FieldProvider field);
 };
 #endif

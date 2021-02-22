@@ -59,9 +59,13 @@ FieldProvider CylindricalHexagonalPhaseProvider::generateInitialCondition(int gr
     gridSizes,
     dq,
     real,
-    m_phaseDimension};
+    m_phaseID};
 
   fftw_free(data);
 
   return initialCondition;
+}
+
+void CylindricalHexagonalPhaseProvider::resetCondition(FieldProvider field)
+{
 }

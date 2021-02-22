@@ -34,6 +34,7 @@ public:
 
     // find quadratic potential coefficients, D(q)
     double quadraticCoeff(double q2) { return (q2 - 1) * (q2 - 1); }
+    void   makeGammaArray(double* Gamma, double* laplacian, int N);
 
     // compute quadratic free-energy
     double fQuad(FieldProvider &field);
@@ -51,7 +52,7 @@ public:
     }
 
     // compute derivative of NL free-energy and store in field
-    void nlDeriv(fftw_complex* realFieldData, fftw_complex* realNLFieldData, int numFieldElements, double &deltaNLDeriv);
+    void nlDeriv(fftw_complex* realFieldData, fftw_complex* realNLFieldData, int numFieldElements);
 
     // period optimization method
     double quadraticCoeffDeriv(double q2) { return 2 * (q2 - 1); }

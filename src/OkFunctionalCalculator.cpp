@@ -22,6 +22,12 @@ double OkFunctionalCalculator::fQuad(fftw_complex* cplxFieldData, double* laplac
   return fQuad;
 }
 
+void OkFunctionalCalculator::makeGammaArray(double* Gamma, double* laplacian, int N)
+{
+  for (int index = 0; index < N; index++)
+    Gamma[index] = quadraticCoeff(-laplacian[index]);
+}
+
 // compute quadratic free-energy from field provider (initializes laplacian)
 double OkFunctionalCalculator::fQuad(FieldProvider &field)
 {
@@ -79,22 +85,15 @@ double OkFunctionalCalculator::fNL(FieldProvider &field)
 void OkFunctionalCalculator::nlDeriv(
   fftw_complex* realFieldData,
   fftw_complex* realNLFieldData,
-  int numFieldElements,
-  double &deltaNLDeriv)
+  int numFieldElements)
 {
-  deltaNLDeriv = 0.0;
   for (int index = 0; index < numFieldElements; index++) {
-    double realNLFieldValOld = realNLFieldData[index][0];
-
     double fieldVal  = realFieldData[index][0];
     double fieldVal2 = fieldVal * fieldVal;
     double fieldVal3 = fieldVal * fieldVal2;
 
     realNLFieldData[index][0] = (m_tau) * fieldVal - (m_gamma / 2.0) * fieldVal2 + (1.0 / 6.0) * fieldVal3;
     realNLFieldData[index][1] = 0.0;
-   
-    double deltaNLDerivVal = (realNLFieldData[index][0] - realNLFieldValOld) / numFieldElements;
-    deltaNLDeriv += deltaNLDerivVal * deltaNLDerivVal;
   }
 }
 

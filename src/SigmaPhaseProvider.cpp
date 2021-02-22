@@ -333,9 +333,13 @@ FieldProvider SigmaPhaseProvider::generateInitialCondition(int gridSize) {
     gridSizes,
     dqVec,
     real,
-    m_phaseDimension};
+    m_phaseID};
 
   fftw_free(data);
 
   return initialCondition;
+}
+
+void SigmaPhaseProvider::resetCondition(FieldProvider field)
+{
 }

@@ -38,6 +38,7 @@ public:
       if (q2 == 0) return 0.0;
       else return q2 + 1.0/q2 - 2; 
     }
+    void   makeGammaArray(double* Gamma, double* laplacian, int N);
 
     // compute quadratic free-energy
     double fQuad(FieldProvider &field);
@@ -55,10 +56,14 @@ public:
     }
 
     // compute derivative of NL free-energy and store in field
-    void nlDeriv(fftw_complex* realFieldData, fftw_complex* realNLFieldData, int numFieldElements, double &deltaNLDeriv);
+    void nlDeriv(fftw_complex* realFieldData, fftw_complex* realNLFieldData, int numFieldElements);
 
     // period optimization method
-    double quadraticCoeffDeriv(double q2) { return 1 - 1.0/(q2 * q2); }
+    double quadraticCoeffDeriv(double q2) 
+    { 
+      if (q2 == 0) return 0.0;
+      else return 1 - 1.0/(q2 * q2); 
+    }
 
     // compute quadratic free-energy for given lattice spacings
     double fQuadB(FieldProvider &field, double* b);

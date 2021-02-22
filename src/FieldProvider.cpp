@@ -12,16 +12,13 @@ FieldProvider::FieldProvider(
   int* gridSizes,
   double* dr,
   const bool real,
-  const int phaseDimension)
+  int phaseID) 
 {
   // dimension of field
   m_dimension = dimension;
 
   // grid sizes
   m_gridSizes = gridSizes;
-
-  // phase dimension
-  m_phaseDimension = phaseDimension;
 
   if (real) {
     m_dx = dr;
@@ -51,8 +48,10 @@ FieldProvider::FieldProvider(
 
   // load data provided and transform:
   if (real) {
-    for (int index = 0; index < m_numFieldElements; index++)
+    for (int index = 0; index < m_numFieldElements; index++) {
       m_realData[index][0] = data[index][0];
+      m_realData[index][1] = data[index][1];
+    }
 
     transformR2C();
   } else {
@@ -64,6 +63,9 @@ FieldProvider::FieldProvider(
     // perform C2R transform
     transformC2R();
   }
+
+  // set phase ID
+  m_phaseID = phaseID;
 }
 
 // constructor to initialize fieldProvider from file
@@ -77,7 +79,6 @@ FieldProvider::FieldProvider(std::string fileName) {
     std::string exceptionMessage = "unable to open file " + fileName;
     throw std::invalid_argument(exceptionMessage);
   }
-
 
   // read dimension of data (first line of file)
   inFile >> m_dimension;
@@ -95,6 +96,9 @@ FieldProvider::FieldProvider(std::string fileName) {
   for (int d = 0; d < m_dimension; d++)
     inFile >> dr[d];
 
+  // read phase ID
+  inFile >> m_phaseID;
+
   // real or complex data ? - use to set grid spacing
   m_dx = (double*) malloc(sizeof(double) * m_dimension);
   m_dq = (double*) malloc(sizeof(double) * m_dimension);
@@ -103,9 +107,6 @@ FieldProvider::FieldProvider(std::string fileName) {
   inFile >> real;
   if (real) setDx(dr);
   else setDq(dr);
-
-  // read phase dimension
-  inFile >> m_phaseDimension;
 
   // allocate memory for real/cplx data and for temp data
   m_realData = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * m_numFieldElements);
@@ -175,11 +176,11 @@ void FieldProvider::saveAsInitializer(std::string fileName, bool real) {
       stream << m_dq[d] << std::endl;
   }
 
+  // print phaseID
+  stream << m_phaseID << std::endl;
+
   // print bool indicating whether data is real or complex
   stream << real << std::endl;
-
-  // print phase dimension
-  stream << m_phaseDimension << std::endl;
 
   // print data
   for (int index = 0; index < m_numFieldElements; index++) {

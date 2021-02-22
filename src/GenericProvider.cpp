@@ -55,19 +55,17 @@ FieldProvider* GenericPhaseProvider::generateInitialCondition()
       dr[0] = 0.0;
 
       fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex));
-
-      FieldProvider initialFieldProvider{
+      FieldProvider* initialFieldProvider = 
+      new FieldProvider{
         data, 
         1,
         gridSize,
         dr,
         false,
-        1
-      };
-      
+        0};
       fftw_free(data);
       
-      return &initialFieldProvider;
+      return initialFieldProvider;
     }
   } // end switch
 }

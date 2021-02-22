@@ -35,9 +35,13 @@ FieldProvider LamellarPhaseProvider::generateInitialCondition(int gridSize) {
     gridSizes,
     dq,
     real,
-    m_phaseDimension};
+    m_phaseID};
 
   fftw_free(data);
 
   return initialCondition;
+}
+
+void LamellarPhaseProvider::resetCondition(FieldProvider field)
+{
 }

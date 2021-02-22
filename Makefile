@@ -1,4 +1,4 @@
-MAIN = BPG_OK
+MAIN = BPG_TEST
 CXX = g++
 CXX_FLAGS = -std=c++17 -O3 -Wall -Wextra -g
 CPP_FILES = $(wildcard src/*.cpp)

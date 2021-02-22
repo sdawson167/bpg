@@ -14,7 +14,7 @@ private:
     double m_avDensity;
     double m_amplitude;
     const int m_dimension = 2;
-    const int m_phaseDimension = 2;
+    const int m_phaseID = 3;
 
     typedef std::vector<int>    intPoint;                                      	
     typedef std::tuple<intPoint, double> point;
@@ -49,5 +49,12 @@ public:
      * ======================================
      */
     FieldProvider generateInitialCondition(int gridSize);
+
+    /*
+     * ======================================
+     *	       reset field provider
+     * ======================================
+     */
+    void resetCondition(FieldProvider field);
 };
 #endif

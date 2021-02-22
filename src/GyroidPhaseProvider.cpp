@@ -67,9 +67,13 @@ FieldProvider GyroidPhaseProvider::generateInitialCondition(int gridSize) {
     gridSizes,
     dxVec,
     real,
-    m_phaseDimension};
+    m_phaseID};
 
   fftw_free(data);
 
   return initialCondition;
+}
+
+void GyroidPhaseProvider::resetCondition(FieldProvider field)
+{
 }

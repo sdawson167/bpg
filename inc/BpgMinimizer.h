@@ -1,553 +1,550 @@
 #ifndef _BPG_MINIMIZER_GUARD
 #define _BPG_MINIMIZER_GUARD
 
-#include <stdlib.h>
-#include <stdexcept>
 #include <cmath>
+#include <complex.h>
+#include <cstring>
+#include <iostream>
+#include <stdlib.h>
 
 #include "fftw3.h"
 #include "FieldProvider.h"
-#include "LbFunctionalCalculator.h"
 
-/* class uses the BPG minimizer algorithm described by Jiang et. al. (2020), arXiv:2002.09898, to minimize the free-energy
- * of a given intial condition with respect to a given free energy functional.
- *
- * TFunctionalCalculator represents the free-energy functional we are minimizing over
- */
 template<typename TFunctionalCalculator>
 class BpgMinimizer {
+  
+  /*
+   * ===========================================================================
+   * 				 CLASS ATTRIBUTES
+   * ===========================================================================
+   */
+
 private:
-    // toggle algorithm components
-    bool   m_useNesterov;         // use Nesterov acceleration
-    bool   m_adaptiveTimeSteps;   // use adaptive time-steps
-    double m_errorTolerance;      // used for convergence test
-    int    m_maxIterations;       // used to abort loops
-    int    m_iterator;            // used to track total iterations
-    int    m_fieldIterator;       // no. of iterations used by field minimizer
-    int    m_periodIterator;      // no. of iterations used by period optimizer
+  double m_errorTolerance;	// used for convergence test
+  int	 m_maxIterations;	// used to limit no. of iterations
+  int 	 m_iterator;		// used to track total iterations (alternating field/period optimization)
+  int 	 m_fieldIterator;	// used to track no. of iterations of field minimization alg.
+  int	 m_periodIterator;	// used to track no. of iterations of period optimization alg.
 
 public:
-    // constructor
-    BpgMinimizer(bool useNesterov, bool useAdaptiveTimeSteps, double errorTolerance, int maxIterations)
-    : m_useNesterov{useNesterov},
-      m_adaptiveTimeSteps{useAdaptiveTimeSteps},
-      m_errorTolerance{errorTolerance},
-      m_maxIterations{maxIterations}
-      {
-        // initialize iterator at zero !
-        m_iterator = 0;
-        m_fieldIterator = 0;
-        m_periodIterator = 0;
-      }
+  // constructor
+  BpgMinimizer(double errorTolerance, int maxIterations)
+  : m_errorTolerance(errorTolerance),
+    m_maxIterations(maxIterations)
+  {
+    m_iterator       = 0;
+    m_fieldIterator  = 0;
+    m_periodIterator = 0;
+  }
 
-      // getter / setter for variables
-      void setNesterov(bool useNesterov) { m_useNesterov = useNesterov; }
-      bool getNesterov() { return m_useNesterov; }
+  // getter functions for iterators
+  int getIterator()       { return m_iterator; }
+  int getFieldIterator()  { return m_fieldIterator; }
+  int getPeriodIterator() { return m_periodIterator; }
 
-      void setATS(bool useATS) { m_adaptiveTimeSteps = useATS; }
-      bool getATS() { return m_adaptiveTimeSteps; }
-
-      void setErrorTol(double errorTol) { m_errorTolerance = errorTol; }
-      double getErrorTol() { return m_errorTolerance; }
-
-      void setMaxIterations(int maxIterations) { m_maxIterations = maxIterations; }
-      int getMaxIterations() { return m_maxIterations; }
-
-      void setIterator(int iterator) { m_iterator = iterator; }
-      int getIterator() { return m_iterator; }
-
-
-    // minimizer function - uses SIS minimizer with (optional) Nesterov acceleration technique and
-    // (optional) adaptive time-stepping (NOTE: adaptive time-stepping has not been implemented yet)
-    // to find field configuration that minimizes free-energy represented by functional calculator
-    void minimizeField(
-      FieldProvider &field,
-      TFunctionalCalculator &calculator)
-    {
-      m_fieldIterator = 0;
-
-      // get information about field
-      fftw_complex* cplxFieldData = field.getCplxDataPointer();
-      fftw_complex* realFieldData = field.getRealDataPointer();
-      const int dimension         = field.getDimension();
-      int* gridSizes              = field.getGridSizes();
-      const int numFieldElements  = field.getNumFieldElements();
-      double* dx 		  = field.getDx();
-      double* dq                  = field.getDq();
-      const int phaseDimension    = field.getPhaseDimension();
-
-      
-      // initialize nesterov field - copy field data
-      int* nestGridSizes = (int*) malloc(sizeof(int) * dimension);
-      memcpy(nestGridSizes, gridSizes, sizeof(int) * dimension);
-
-      double* nestDq = (double*) malloc(sizeof(double) * dimension);
-      memcpy(nestDq, dq, sizeof(double) * dimension); 
-
-      FieldProvider nestField(
-        cplxFieldData, //initNestData,
-        dimension,
-        nestGridSizes,
-        nestDq,
-        false,
-        phaseDimension);
-      fftw_complex* realNestData = nestField.getRealDataPointer();
-      fftw_complex* cplxNestData = nestField.getCplxDataPointer();
-
-      // NL derivative field - compute Nl derivative and create field provider
-      fftw_complex* initNlDerivData = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-      double deltaNLVal = 0.0;
-      calculator.nlDeriv(realNestData, initNlDerivData, numFieldElements, deltaNLVal);
-
-      /*
-      if (dimension == 1) {
-        // initialize fftw stuff
-        fftw_complex *in, *out;
-        in  = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-        initNlDerivData = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-
-        for (int index = 0; index < numFieldElements; index++) {
-          in[index][0] = 0;
-          in[index][1] = 0;
-          initNlDerivData[index][0] = 0;
-          initNlDerivData[index][1] = 0;
-        }
-
-        fftw_plan p = fftw_plan_dft_1d(numFieldElements, in, initNlDerivData, FFTW_FORWARD,FFTW_ESTIMATE);
-
-        // load data into in
-        double temp;
-        calculator.nlDeriv(realNestData, in, numFieldElements, temp);
-
-        // execute
-        fftw_execute(p);
-
-        // delete everything
-        fftw_destroy_plan(p);
-        fftw_free(in);
-      }
-      */
-
-      int* nlDerivGridSizes = (int*) malloc(sizeof(int) * dimension);
-      memcpy(nlDerivGridSizes, gridSizes, sizeof(int) * dimension);
-
-      double* nlDerivDx = (double*) malloc(sizeof(double) * dimension);
-      memcpy(nlDerivDx, dx, sizeof(double) * dimension);
-
-      FieldProvider nlDerivField(
-        initNlDerivData,
-        dimension,
-        nlDerivGridSizes,
-        nlDerivDx,    // note for real-field initialization we need real grid spacing
-        false,
-        phaseDimension);
-      fftw_free(initNlDerivData);
-      fftw_complex* realNlDerivData = nlDerivField.getRealDataPointer();
-      fftw_complex* cplxNlDerivData = nlDerivField.getCplxDataPointer();
-
-      /*
-      // timestep field
-      fftw_complex* initTimeStepData = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-      memcpy(initTimeStepData, cplxFieldData, sizeof(fftw_complex) * numFieldElements);
-      FieldProvider timeStepField(
-        initTimeStepData,
-        dimension,
-        gridSizes,
-        dq,
-        false,
-        phaseDimension);
-      fftw_complex* timeStepData = timeStepField.getCplxDataPointer();
-      */
-
-      // allocate memory for laplacian and initialize
-      double* laplacian = (double*) malloc(sizeof(double) * numFieldElements);
-      field.laplacian(laplacian);
-
-      // allocate memory for quadratic coefficient array and initialize
-      double* D = (double*) malloc(sizeof(double) * numFieldElements);
-      for (int index = 0; index < numFieldElements; index++)
-        D[index] = calculator.quadraticCoeff(-laplacian[index]);
-
-      // allocate memory for storing old nesterov field data
-      fftw_complex* oldNestField = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-
-      // compute free-energy
-      double f0 = calculator.f(cplxFieldData, realFieldData, laplacian, numFieldElements);
-      double fOld = f0;
-
-      // initialize iteration variables
-
-      // timestep and adaptive time-stepping variables
-      const double tMin = 0.1;      // adaptive - never allow timestep to get smaller than this
-      const double tMax = 2.0;      // adaptive - never allow timestep to get larger than this
-      const double t0 = 1.0;        // adaptive ? initial timestep : timestep
-      double tStep = t0;
-      //const double rho    = 0.5 * (sqrt(5) - 1.0); // update coefficient (rho < 1)
-      //const double delta  = 0.01;                              // used for timestep update inequality test
-
-      // Nesterov step variables
-      double       theta  = 1.0;
-      const double thetaQ = 0.0;
-      double       beta   = 0.0;
-
-      // error
-      double currentError = 1.0;
-
-      // stop criterion: stop loop when error is below tolerance OR max iterations reached
-      bool stopCriterion = false;
-
-      // while loop 
-
-      while(!stopCriterion)
-      {
-        // increment iterator
-        m_fieldIterator++;
-
-	// update field :
-        // double deltaNest = 0.0; // needed for time-step estimation
-        for (int index = 0; index < numFieldElements; index++) {
-
-          // store current field values
-          double reCplxFieldOldVal = cplxFieldData[index][0];
-          double imCplxFieldOldVal = cplxFieldData[index][1];
-
-          // extract Nl deriv values:
-          double reCplxNlDerivVal  = cplxNlDerivData[index][0] / numFieldElements;
-          double imCplxNlDerivVal  = cplxNlDerivData[index][1] / numFieldElements;
-
-          // matrix element for update step
-          double A = 1.0 - tStep * laplacian[index] * D[index];
-
-          // update cplx field
-          cplxFieldData[index][0] = (cplxNestData[index][0] + tStep * laplacian[index] * reCplxNlDerivVal) / A;
-          cplxFieldData[index][1] = (cplxNestData[index][1] + tStep * laplacian[index] * imCplxNlDerivVal) / A;
-
-          // store current Nesterov field values
-          double reNestFieldOldVal = cplxNestData[index][0];
-          double imNestFieldOldVal = cplxNestData[index][1];
-          oldNestField[index][0] = realNestData[index][0];
-
-          // update cplx Nesterov field
-          double reNestFieldVal, imNestFieldVal;
-          if (m_useNesterov) {
-            reNestFieldVal = (1.0 + beta) * cplxFieldData[index][0] - beta * reCplxFieldOldVal;
-            imNestFieldVal = (1.0 + beta) * cplxFieldData[index][1] - beta * imCplxFieldOldVal;
-          } else {
-            reNestFieldVal = cplxFieldData[index][0];
-            imNestFieldVal = cplxFieldData[index][1];
-          }
-          cplxNestData[index][0] = reNestFieldVal;
-          cplxNestData[index][1] = imNestFieldVal;
-
-          // calculate change in nest field (used for time-step estimation)
-          //deltaNest += (reNestFieldVal - reNestFieldOldVal) * (reNestFieldVal - reNestFieldOldVal) +
-          //             (imNestFieldVal - imNestFieldOldVal) * (imNestFieldVal - imNestFieldOldVal);
-        }
-
-        // transform field and Nesterov field back into real space
-        field.transformC2R();
-        nestField.transformC2R();
-
-        // update NL derivative field in real space and transform
-	calculator.nlDeriv(realNestData, realNlDerivData, numFieldElements, deltaNLVal);
-	nlDerivField.transformR2C();
-
-        // compute new free-energy
-        double f     = calculator.f(cplxFieldData, realFieldData, laplacian, numFieldElements);
-        //double fNest = calculator.f(cplxNestData, realNestData, laplacian, numFieldElements);
-
-        // compute error
-        currentError = fOld - f;
-        fOld = f;
-
-        // update Nesterov coefficient beta
-	// reset condition - free-energy increases:
-        if (currentError < 0 && m_useNesterov) {
-          theta = 1.0;
-        }
-        double theta2   = theta * theta;
-        double newTheta = -0.5 * (theta2 - thetaQ) + sqrt(0.25 * (theta2 - thetaQ) * (theta2 - thetaQ) + theta2);
-        beta            = theta * (1 - theta) / (theta2 + newTheta);
-        theta           = newTheta;
-
-        // update stopCriterion
-        if (m_fieldIterator >= m_maxIterations || std::abs(currentError) < m_errorTolerance)
-	  stopCriterion = true;
-
-      } // end while loop
-
-      // check no. of iterations
-      if (m_fieldIterator == m_maxIterations)
-        throw std::runtime_error("Maximum iterations reached in field optimization");
-
-      free(laplacian);
-      free(D);
-      fftw_free(oldNestField);
-    } // end minimizeField method
+  /*
+   * =============================================================================
+   *                      FULL OPTIMIZATION (FIELD + PERIOD)
+   * =============================================================================
+   */
+  void minimize( FieldProvider &field, TFunctionalCalculator &calculator )
+  {
+    // initialize iterator
+    m_iterator = 0;
 
     /*
-     * Collection of methods for period optimization
+     * ================= iteration variables =====================
+     */
+    
+    double fNew = calculator.f(field);
+    double fOld = 0.0;
+    double currentError = 0.0;
+    bool stopCriterion = false;
+
+    /*
+     * ======================== loop =============================
+     */
+    while (!stopCriterion)
+    {
+      // increment iterator
+      m_iterator++;
+
+      // optimize field (fixed period)
+      optimizeField(field, calculator);
+      
+      // optimize period (fixed densities)
+      optimizePeriods(field, calculator);
+
+      // recompute free-energy
+      fOld = fNew;
+      fNew = calculator.f(field);
+
+      // update error
+      currentError = fNew - fOld;
+
+      // update stop criterion
+      if (std::abs(currentError) < m_errorTolerance || m_iterator == m_maxIterations)
+        stopCriterion = true;
+
+    }
+    
+    /*
+     * ==================== finish up ============================
      */
 
-    // method computes optimal lattice vector size(s) using conjugate gradient method
-    // and uses them to update the real and cplx lattice spacing of field
-    void optimizePeriods(
-      FieldProvider &field,
-      TFunctionalCalculator &calculator)
-    {
-      m_periodIterator = 0;
-
-      // unpack variables in field provider a little bit
-      fftw_complex* cplxFieldData = field.getCplxDataPointer(); // cplx coefficients phi_n
-
-      const int d = field.getDimension();
-
-      const int numFieldElements = field.getNumFieldElements();
-      const int* N = field.getGridSizes();
-
-      // initial reciprocal lattice spacing
-      double *dQ = field.getDq();
-
-      // initialize arrays to hold b_k and b_{k-1} :
-      double* bOld = (double*) calloc(3, sizeof(double));
-      double* bNew = (double*) calloc(3, sizeof(double));
-      // reorder elements of lattice spacing into 3-component vector b_k:
-      bNew[0]   = dQ[d - 1];
-      if (d > 1) {
-        bNew[1]   = dQ[d - 2];
-        if (d > 2)
-          bNew[2] = dQ[d - 3];
-      }
-
-      // initialize arrays to hold residuals and step direction
-      double* rOld = (double*) calloc(3, sizeof(double));
-      double* rNew = (double*) calloc(3, sizeof(double));
-      double* s    = (double*) calloc(3, sizeof(double));
-
-      // compute residual and magnitude:
-      double gradMagnitude = computeResidual(rNew, bNew, numFieldElements, N, d, calculator, cplxFieldData);
-
-      // initialize conjugate coefficient
-      double beta = 0.0;
-
-      // iteration variables
-      double f0 = calculator.fQuad(field), f; // used to verify free-energy decrease every loop
-      bool posFlag = false;
-      bool stopCriterion = gradMagnitude < m_errorTolerance;  // we may already be at optimal unit cell sizing!
-
-      while(!stopCriterion) {
-        m_periodIterator++;
-
-        // compute line search direction s:
-        s[0] = rNew[0] + beta * rOld[0];
-        s[1] = rNew[1] + beta * rOld[1];
-        s[2] = rNew[2] + beta * rOld[2];
-
-        // compute optimal step-size, alpha
-        double alpha = 1.0;
-        findAlpha(alpha, calculator, field, bOld, s, -gradMagnitude, posFlag);
-
-        // store step
-        bOld[0] = bNew[0];
-        bOld[1] = bNew[1];
-        bOld[2] = bNew[2];
-
-        // update b
-        bNew[0] = bOld[0] + alpha * s[0];
-        bNew[1] = bOld[1] + alpha * s[1];
-        bNew[2] = bOld[2] + alpha * s[2];
-
-        // store residuals:
-        rOld[0] = rNew[0];
-        rOld[1] = rNew[1];
-        rOld[2] = rNew[2];
-
-        // update residuals:
-        double gradMagnitudeOld = gradMagnitude;
-        gradMagnitude = computeResidual(rNew, bNew, numFieldElements, N, d, calculator, cplxFieldData);
-
-        // compute conjugate coefficient for next time (Fletcher-Reeves) - use restart to prevent oscillation:
-        if (gradMagnitude > gradMagnitudeOld) beta = 0.0;
-        else beta = gradMagnitude / gradMagnitudeOld;
-
-        // compute change in free-energy
-        double f = calculator.fQuadB(field, bNew);
-        double err = f - f0;
-        if (err > 0)
-          posFlag = true;
-        f0 = f;
-
-        // update stop criterion
-        if (abs(err) < m_errorTolerance || m_periodIterator == m_maxIterations)
-          stopCriterion = true;
-      }
-
-      // verify max iterations have not been reached
-      if (m_periodIterator == m_maxIterations)
-        throw std::runtime_error("Maximum iterations reached in period optimization");
-
-      // repackage into format that field-provider likes
-      double* newDq = (double*) malloc(sizeof(double) * d);
-      newDq[d - 1] = bNew[0];
-      if (d > 1) {
-        newDq[d - 2] = bNew[1];
-        if (d > 2)
-          newDq[d - 3] = bNew[2];
-      }
-
-      // update field provider lattice spacings:
-      field.setDq(newDq);
-
-      free(bOld);
-      free(bNew);
-
-      free(rOld);
-      free(rNew);
-      free(s);
-    } // end period optimization method
-
-    double computeResidual(
-      double* r,
-      double* b,
-      const int numFieldElements,
-      const int* N,
-      const int d,
-      TFunctionalCalculator &calculator,
-      fftw_complex* cplxFieldData)
-    {
-      r[0] = 0.0;
-      r[1] = 0.0;
-      r[2] = 0.0;
-
-      // loop through all reciprocal lattice points
-      for (int index = 0; index < numFieldElements; index++) {
-
-        // determine x, y, z coordinates of lattice point:
-        int i{0}, j{0}, k{0};
-        int iMod{0}, jMod{0}, kMod{0};
-
-        int Nx = N[d-1];
-        i = index % Nx;
-        iMod = i < Nx / 2 ? i : Nx - i;
-
-        if (d > 1) {
-          int Ny = N[d-2];
-          j = (index - i) / Nx % Ny;
-          jMod = j < Ny / 2 ? j : Ny - j;
-
-          if (d > 2) {
-            int Nz = N[d-3];
-            k = ((index - i) / Nx - j) / Ny;
-            kMod = k < Nz / 2 ? k : Nz - k;
-          }
-        }
-
-        // calculate reciprocal lattice vector at this point
-        double q2 =   (iMod * iMod) * (b[0] * b[0])
-                    + (jMod * jMod) * (b[1] * b[1])
-                    + (kMod * kMod) * (b[2] * b[2]);
-
-        // derivative of Gamma(q2)
-        double gammaPrime = calculator.quadraticCoeffDeriv(q2);
-
-        // amplitude of fourier peak:
-        double phi2 = cplxFieldData[index][0] * cplxFieldData[index][0] + cplxFieldData[index][1] * cplxFieldData[index][1];
-
-        r[0] += -gammaPrime * phi2 * iMod * iMod * b[0];
-        r[1] += -gammaPrime * phi2 * jMod * jMod * b[1];
-        r[2] += -gammaPrime * phi2 * kMod * kMod * b[2];
-      } // end loop over reciprocal lattice points
-
-      return (r[0] * r[0]) + (r[1] * r[1]) + (r[2] * r[2]);
-    } // end computeResiduals method
-
-    // returns step size found via backtracking line search method:
-    void findAlpha(
-      double &alpha,
-      TFunctionalCalculator &calculator,
-      FieldProvider &field,
-      double* bk,
-      const double* sk,
-      const double m,
-      bool posFlag)
-    {
-      // set alpha to start
-      alpha = 1.0;  // max value of alpha
-
-      // initial free-energy:
-      double fB0 = calculator.fQuadB(field,bk);
-
-      // algorithm variables:
-      const double c = 0.2;
-      const double rho = 0.9;
-
-      double alphaMin = 1e-1;
-      if (m_periodIterator > 50 || posFlag) alphaMin = 1e-2;
-
-      double* b = (double*) malloc(sizeof(double) * 3);
+    if (m_iterator == m_maxIterations)
+      throw std::runtime_error("maximum iterations reached");
       
-      bool stopCriterion = false;
-      
-      while (!stopCriterion) {
-        // update b vectors:
-        b[0] = bk[0] + alpha * sk[0];
-        b[1] = bk[1] + alpha * sk[1];
-        b[2] = bk[2] + alpha * sk[2];
+  } // end minimize method
 
-        double lhs = fB0 - calculator.fQuadB(field,bk);
-        double rhs = - alpha * c * m;
 
-        if (lhs >= rhs || alpha < alphaMin) {
-          stopCriterion = true;
-          alpha = alphaMin;
-        }
-        else alpha *= rho;
-      }
-      free(b);
-    } // end findAlpha method
+  /*
+   * =============================================================================
+   * 			        FIELD OPTIMIZATION
+   * =============================================================================
+   */
+  void optimizeField( FieldProvider &field, TFunctionalCalculator &calculator )
+  {
+    // start field optimization - set no. of iterations to zero
+    m_fieldIterator = 0;
 
-    // optimize field config and period
-    void findMinimum(
-      FieldProvider &field,
-      TFunctionalCalculator &calculator)
+
+    /* 
+     * =================== Initial field data =======================
+     */
+    fftw_complex* cplxFieldData = field.getCplxDataPointer();
+    fftw_complex* realFieldData = field.getRealDataPointer();
+    const int     d             = field.getDimension();
+    const int*    gridSizes     = field.getGridSizes();
+    const int     N             = field.getNumFieldElements();
+    double*       dx            = field.getDx();
+    double*       dq            = field.getDq(); 
+    const int     phaseID       = field.getPhaseID();
+
+    // allocate memory for Laplacian and initialize
+    double* laplacian = (double*) malloc(N * sizeof(double));
+    field.laplacian(laplacian);
+
+
+    /*
+     * ============== Nesterov field initialization ==================
+     */ 
+    
+    // first need to make new grid sizes and spacings arrays - these are copied from initial field 
+    int*    nestGridSizes = (int*)    malloc(d * sizeof(int));
+    double* nestDq	  = (double*) malloc(d * sizeof(double));
+    memcpy(nestGridSizes, gridSizes, d * sizeof(int));	// memcpy(dest, src, size)
+    memcpy(nestDq,	  dq,	     d * sizeof(double));
+
+    // create field
+    FieldProvider nestField(
+      cplxFieldData,    // field data, note: data works different from other array initializations
+      d,                // dimension
+      nestGridSizes,    // grid sizes
+      nestDq,           // grid spacing
+      false,            // initialized using cplx data
+      phaseID);	        
+
+    // get pointers to Nesterov field
+    fftw_complex* realNestData = nestField.getRealDataPointer();
+    fftw_complex* cplxNestData = nestField.getCplxDataPointer();
+
+
+    /*
+     * ============= NL derivative field initialization ============== 
+     */
+
+    // initialize data
+    fftw_complex* initNlDerivData = (fftw_complex*) fftw_malloc(N * sizeof(fftw_complex));
+
+    // compute NL deriv from real field data
+    calculator.nlDeriv(realNestData, initNlDerivData, N);
+
+    // need to make new grid sizes/spacing arrays
+    int*    nlDerivGridSizes = (int*)    malloc(d * sizeof(int));
+    double* nlDerivDx        = (double*) malloc(d * sizeof(double));
+    memcpy(nlDerivGridSizes, gridSizes, d * sizeof(int));
+    memcpy(nlDerivDx,        dx,        d * sizeof(double));
+
+    // create field 
+    FieldProvider nlDerivField(
+      initNlDerivData,
+      d,
+      nlDerivGridSizes,
+      nlDerivDx,
+      true,      // initialized using real data
+      phaseID);      
+
+    // free pointer to initializer data
+    fftw_free(initNlDerivData);
+
+    // get pointers to Nl deriv field
+    fftw_complex* realNlDerivData = nlDerivField.getRealDataPointer();
+    fftw_complex* cplxNlDerivData = nlDerivField.getCplxDataPointer();
+
+
+    /*
+     * ================= Quadratic coefficients ===================
+     */
+
+    // make and store array of quadratic coefficients - Gamma(q)
+    double* Gamma = (double*) malloc(N * sizeof(double));
+    calculator.makeGammaArray(Gamma, laplacian, N);
+
+
+    /* 
+     * ============== initialize iteration variables ==============
+     */
+
+    // free-energy
+    double fNew = calculator.f(cplxFieldData, realFieldData, laplacian, N);
+    double fOld = 0.0;
+
+    // timestep
+    const double tStep = 0.1;
+    
+    // Nesterov step variables
+    double theta = 1.0;
+    double beta  = 0.0;
+
+    // error
+    double currentError = 0.0;
+
+    // boolean that determines whether to exit iterative loop
+    bool stopCriterion = false;
+
+    /* 
+     * ====================== while loop ==========================  
+     */
+    
+    while(!stopCriterion)
     {
-      // set iterator to zero
-      m_iterator = 0;
+      // increment iterator
+      m_fieldIterator++;
 
-      // loop until error is smaller than tolerance or max no. of iterations are reached
-      bool stopCriterion = false;
+      // update field
+      for (int i = 0; i < N; i++) {
+	// nl derivative field - real and imaginary parts
+        double cplxNlDerivReVal = cplxNlDerivData[i][0];
+	double cplxNlDerivImVal = cplxNlDerivData[i][1];
 
-      // error - computed using change in free-energy:
-      double f0 = calculator.f(field); // intial free-energy
-      double error = 1.0;
+	// matrix element for update step
+	double A = 1.0 - tStep * laplacian[i] * Gamma[i];
 
-      while (!stopCriterion)
-      {
-        m_iterator++;
+	// store old field vals
+	double cplxFieldOldReVal = cplxFieldData[i][0];
+	double cplxFieldOldImVal = cplxFieldData[i][1];
 
-        // minimize field
-        minimizeField(field, calculator);
+	// update real and imaginary parts of field
+	cplxFieldData[i][0] = (cplxNestData[i][0] + tStep * laplacian[i] * cplxNlDerivReVal) / A;
+	cplxFieldData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivImVal) / A;
 
-        // minimize periods
-        optimizePeriods(field, calculator);
-
-        // recompute free-energy
-        double f = calculator.f(field);
-
-        // update error
-        error = f - f0;
-
-        // store free-energy of current config
-        f0 = f;
-
-        // update stop criterion
-        if (abs(error) < m_errorTolerance || m_iterator == m_maxIterations)
-          stopCriterion = true;
+	// update Nesterov field
+	cplxNestData[i][0] = (1.0 + beta) * cplxFieldData[i][0] - beta * cplxFieldOldReVal;
+        cplxNestData[i][1] = (1.0 + beta) * cplxFieldData[i][1] - beta * cplxFieldOldImVal;	
       }
 
-      // check if max iterations have been reached
-      if (m_iterator == m_maxIterations)
-        throw std::runtime_error("Maximum iterations reached");
-    } // end find minimum method
-};
+      // transform field and Nesterov field to real space
+      field.transformC2R();
+      nestField.transformC2R();
+
+      // update NL deriv field in real space and then transform to cplx space
+      calculator.nlDeriv(realNestData, realNlDerivData, N);
+      nlDerivField.transformR2C();
+
+      // compute change in free-energy - used as error 
+      fOld = fNew;
+      fNew = calculator.f(cplxFieldData, realFieldData, laplacian, N);
+      currentError = fOld - fNew;
+
+      // update Nesterov coefficient - use test to damp oscillations
+      if (currentError < 0)
+        theta = 1.0;
+      double theta2   = theta * theta;
+      double newTheta = -0.5 * theta2 + std::sqrt(0.25 * theta2 * theta2 + theta2);
+      beta = theta * (1 - theta) / (theta2 + newTheta);
+      theta = newTheta;  
+
+      // update stop criterion
+      if (m_fieldIterator == m_maxIterations || std::abs(currentError) < m_errorTolerance)
+        stopCriterion = true;
+
+    } // end of while loop
+
+    /*
+     * ====================== wrap it up! =============================
+     */
+
+    // if we've reached the max no. of iterations, throw an error
+    if (m_fieldIterator == m_maxIterations)
+      throw std::runtime_error("maximum iterations reached in field optimization");
+
+    // free laplacian and quad coefficent arrays
+    free(laplacian);
+    free(Gamma);  
+  } // end of field optimization method
+
+
+  /*
+   * =========================================================================================
+   * 			              PERIOD OPTIMIZATION
+   * =========================================================================================
+   */
+
+  void optimizePeriods( FieldProvider &field, TFunctionalCalculator &calculator) 
+  {
+    // start iterator at zero
+    m_periodIterator = 0;
+
+    /*
+     * ==================== unpack field provider =======================
+     */
+
+    fftw_complex* cplxFieldData = field.getCplxDataPointer();
+    const int     d             = field.getDimension();
+    const int     N             = field.getNumFieldElements();
+    const int*    gridSizes     = field.getGridSizes();
+    double*       dQ            = field.getDq();
+
+    /*
+     * ======================= initializations ===========================
+     */
+
+    double* b    = (double*) calloc(3, sizeof(double)); // new reciprocal vec
+    double* rOld = (double*) calloc(3, sizeof(double)); // old gradient vec
+    double* rNew = (double*) calloc(3, sizeof(double)); // new gradient vec
+    double* s    = (double*) calloc(3, sizeof(double)); // step direction vec
+
+    /* 
+     * ================== initialize reciprocal vector ==================
+     */
+    
+    b[0] = dQ[d - 1];
+    if (d > 1) {
+      b[1] = dQ[d - 2];
+      if (d > 2)
+        b[2] = dQ[d - 3];
+    }
+    
+    /*
+     * =========== compute initial residual (gradient vector) ===========
+     */
+    
+    computeGradient(rNew, b, calculator, cplxFieldData, d, N, gridSizes);
+    double gradMagnitudeSquared = (rNew[0] * rNew[0]) + (rNew[1] * rNew[1]) + (rNew[2] * rNew[2]);
+
+    /*
+     * ====================== iteration variables =======================
+     */
+    double alpha = 1.0; // step size
+    double beta  = 0.0; // conjugate coefficient
+
+    double fNew = calculator.fQuad(field); // initial free-energy
+    double fOld = 0.0;
+    double currentError = 0.0;
+    bool   posFlag = false; // becomes true if free-energy ever increases during loop
+
+    // stop criterion 
+    // note: if grad magnitude is small then we may not need to do anything 
+    bool   stopCriterion = gradMagnitudeSquared < m_errorTolerance;   
+
+    /*
+     * ========================= while loop =============================
+     */
+
+    while (!stopCriterion) {
+      m_periodIterator++;
+
+      // compute line search direction s:
+      s[0] = rNew[0] + beta * rOld[0];
+      s[1] = rNew[1] + beta * rOld[1];
+      s[2] = rNew[2] + beta * rOld[2];
+
+      // compute optimal step-size (alpha) using backtracking line search
+      // and update lattice vector b using optimal alpha
+      // posFlag used here to shrink minimum allowed step size (crude)
+      findAlpha(alpha, b, s, gradMagnitudeSquared, calculator, field, posFlag);
+
+      // store residuals
+      double gradMagnitudeOld = gradMagnitudeSquared;
+      rOld[0] = rNew[0];
+      rOld[1] = rNew[1];
+      rOld[2] = rNew[2];
+
+      // compute new residuals
+      computeGradient(rNew, b, calculator, cplxFieldData, d, N, gridSizes);
+      gradMagnitudeSquared = (rNew[0] * rNew[0]) + (rNew[1] * rNew[1]) + (rNew[2] * rNew[2]); 
+
+      // compute conjugate coefficient for next time (Fletcher-Reeves formula)
+      // use restart to minimize oscillations
+      if (gradMagnitudeSquared > gradMagnitudeOld) beta = 0.0;
+      else beta = gradMagnitudeSquared / gradMagnitudeOld;
+
+      // compute change in free-energy - used as error
+      fOld = fNew;
+      fNew = calculator.fQuadB(field, b);
+      currentError = fNew - fOld;
+
+      if (currentError > 0) posFlag = true;
+
+      // update stop criterion
+      if (std::abs(currentError) < m_errorTolerance || m_periodIterator == m_maxIterations)
+        stopCriterion = true;
+    } // end while loop
+
+    // if we've reached maximum iterations throw an error
+    if (m_periodIterator == m_maxIterations)
+      throw std::runtime_error("maximum iterations reached in period optimization");
+
+    // repackage reciprocal lattice vector b into format that field-provider likes
+    double* newDq = (double*) malloc(d * sizeof(double));
+    newDq[d-1] = b[0];
+    if (d > 1) {
+      newDq[d-2] = b[1];
+      if (d > 2)
+        newDq[d-3] = b[2];
+    }
+
+    // update field provider lattice spacings:
+    field.setDq(newDq);	// note - do it this way because it also updates real spacing
+
+    // free all arrays
+    // free(bOld);
+    free(b);
+    free(rOld);
+    free(rNew);
+    free(s);   
+    
+  } // end of period optimization method
+
+  /* 
+   * ===================================================================
+   * 		   period optimization - helper functions
+   * ===================================================================
+   */
+private:
+
+  /*
+   * ===================================================================
+   *  			COMPUTE GRADIENT VECTOR
+   * ===================================================================
+   */
+  void computeGradient(
+    double* r,
+    double* b,
+    TFunctionalCalculator &calculator,
+    fftw_complex* cplxFieldData, 
+    const int d,
+    const int N, 
+    const int* gridSizes) 
+  {
+    // initialize residuals 
+    r[0] = 0.0;
+    r[1] = 0.0;
+    r[2] = 0.0;
+
+    // loop over reciprocal lattice points
+    for (int index = 0; index < N; index++) {
+      
+      // determine x, y, z indices of point:
+      // need to also shift indicies to get negative values
+      int i = 0, j = 0, k = 0;
+      int iMod = 0, jMod = 0, kMod = 0;
+
+      int Nx = gridSizes[d-1];
+      i = index % Nx;
+      iMod = i < Nx / 2 ? i : Nx - i;
+
+      if (d > 1) {
+        int Ny = gridSizes[d-2];
+	j = (index - i) / Nx % Ny;
+	jMod = j < Ny / 2 ? j : Ny - j;
+
+	if (d > 2) {
+	  int Nz = gridSizes[d-3];
+	  k = ((index - i) / Nx - j) / Ny;
+	  kMod = k < Nz / 2 ? k : Nz - k;
+	}
+      }
+
+      // calculate squared reciprocal lattice vector (q2) at this point:
+      double q2 = (iMod * iMod) * (b[0] * b[0]) +
+	          (jMod * jMod) * (b[1] * b[1]) +
+		  (kMod * kMod) * (b[2] * b[2]);
+
+      // get value of derivative Gamma'(q2)
+      double GammaPrime = calculator.quadraticCoeffDeriv(q2);
+
+      // squared amplitude of fourier peak:
+      double phi2 = cplxFieldData[index][0] * cplxFieldData[index][0] +
+	            cplxFieldData[index][1] * cplxFieldData[index][1];
+
+      // add value onto residual
+      r[0] += -GammaPrime * phi2 * (iMod * iMod) * b[0];
+      r[1] += -GammaPrime * phi2 * (jMod * jMod) * b[1];
+      r[2] += -GammaPrime * phi2 * (kMod * kMod) * b[2];
+
+    } // end loop over reciprocal lattice points
+  } // end compute gradient method
+
+  /*
+   * ============================================================================
+   *                              COMPUTE STEP SIZE
+   * ============================================================================
+   */
+
+  void findAlpha(
+    double& alpha,
+    double* b,
+    double* s,
+    double gradMagnitude,
+    TFunctionalCalculator& calculator,
+    FieldProvider &field,
+    bool posFlag)
+  {
+    // initialize alpha to max val.
+    const double alphaMax = 1.0;
+    alpha = alphaMax;
+
+    // initial free-energy
+    double f0 = calculator.fQuadB(field, b);
+
+    // algorithm variables
+    const double c        = 0.1;
+    const double rho      = 0.9;
+
+    // minimum step size
+    bool         shrinkStep = (m_periodIterator > 50 || posFlag);
+    const double alphaMin   = shrinkStep ? 1e-2 : 1e-1; 
+
+    double* bNew = (double*) calloc(3, sizeof(double));
+    bool stopCriterion = false;
+
+    while (!stopCriterion) {
+      // update b-vectors
+      bNew[0] = b[0] + alpha * s[0];
+      bNew[1] = b[1] + alpha * s[1];
+      bNew[2] = b[2] + alpha * s[2];
+
+      // calculate left and right-hand sides of inequality
+      double lhs = f0 - calculator.fQuadB(field, bNew);
+      double rhs = alpha * c * gradMagnitude;
+
+      // test inequality:
+      // if inequality holds or alpha is already too small - accept this value of alpha
+      if (lhs >= rhs || alpha < alphaMin) stopCriterion = true;
+      // otherwize shrink alpha and try again!
+      else alpha *= rho;
+    }
+
+    // update step vector
+    b[0] = bNew[0];
+    b[1] = bNew[1];
+    b[2] = bNew[2];
+
+    free(bNew);
+  } // end findAlpha method
+
+}; // end class definition
+
 #endif
