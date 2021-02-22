@@ -14,8 +14,7 @@
 #include "BpgMinimizer.h"
 #include "FieldProvider.h"
 #include "GenericProvider.h"
-#include "LamellarPhaseProvider.h"
-#include "OkFunctionalCalculator.h"
+#include "LbFunctionalCalculator.h"
 
 std::vector<std::string> divideWords(std::string str)
 {
@@ -100,7 +99,7 @@ int main(int argc, char** argv)
     }
 
     if (argc != 5) {
-      std::cout << "incorrect no. of input params for Ok model" << std::endl;
+      std::cout << "incorrect no. of input params for Lb model" << std::endl;
       return 1;
     }
 
@@ -117,7 +116,7 @@ int main(int argc, char** argv)
   }
   
   // initialize minimizer object
-  BpgMinimizer<OkFunctionalCalculator> minimizer(1e-8, 1000);
+  BpgMinimizer<LbFunctionalCalculator> minimizer(1e-8, 1000);
 
   // loop through phases
   for (std::vector<int>::const_iterator idIter = phaseIdList.begin(); idIter != phaseIdList.end(); idIter++) { 
@@ -148,7 +147,7 @@ int main(int argc, char** argv)
       // initialize calculator
       double tau   = otherParams[0];
       double gamma = otherParams[1];
-      OkFunctionalCalculator calculator(tau, gamma);
+      LbFunctionalCalculator calculator(tau, gamma);
 
       std::cout << std::setprecision(10);
       

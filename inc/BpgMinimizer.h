@@ -342,7 +342,8 @@ public:
     double fNew = calculator.fQuad(field); // initial free-energy
     double fOld = 0.0;
     double currentError = 0.0;
-    bool   posFlag = false; // becomes true if free-energy ever increases during loop
+    bool   posFlag = false; // becomes true if free-energy increases during loop
+    double alphaMin = 0.1;  // minimum step-size (can be decreased if oscillations occur)
 
     // stop criterion 
     // note: if grad magnitude is small then we may not need to do anything 
@@ -363,7 +364,7 @@ public:
       // compute optimal step-size (alpha) using backtracking line search
       // and update lattice vector b using optimal alpha
       // posFlag used here to shrink minimum allowed step size (crude)
-      findAlpha(alpha, b, s, gradMagnitudeSquared, calculator, field, posFlag);
+      findAlpha(alpha, b, s, gradMagnitudeSquared, calculator, field, posFlag, alphaMin);
 
       // store residuals
       double gradMagnitudeOld = gradMagnitudeSquared;
@@ -386,6 +387,7 @@ public:
       currentError = fNew - fOld;
 
       if (currentError > 0) posFlag = true;
+      else posFlag = false;
 
       // update stop criterion
       if (std::abs(currentError) < m_errorTolerance || m_periodIterator == m_maxIterations)
@@ -500,7 +502,8 @@ private:
     double gradMagnitude,
     TFunctionalCalculator& calculator,
     FieldProvider &field,
-    bool posFlag)
+    bool posFlag,
+    double &alphaMin)
   {
     // initialize alpha to max val.
     const double alphaMax = 1.0;
@@ -513,9 +516,10 @@ private:
     const double c        = 0.1;
     const double rho      = 0.9;
 
-    // minimum step size
-    bool         shrinkStep = (m_periodIterator > 50 || posFlag);
-    const double alphaMin   = shrinkStep ? 1e-2 : 1e-1; 
+    // minimum step size:
+    // decrease if free-energy increases OR if we've taken too many steps (may indicate oscillation)
+    if (posFlag) alphaMin *= 0.1;
+    if (m_periodIterator % 50 == 0) alphaMin *= 0.1;
 
     double* bNew = (double*) calloc(3, sizeof(double));
     bool stopCriterion = false;
