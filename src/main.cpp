@@ -137,8 +137,8 @@ int main(int argc, char** argv)
       // check if convergence was achieved at last point - if not, need to reset initial condition
       /*
       if (!convergenceFlag){
-	delete(field);
-        *field = provider.generateInitialCondition();
+        // reset initial condition
+	provider.resetField(*field);
       }
       */
 
