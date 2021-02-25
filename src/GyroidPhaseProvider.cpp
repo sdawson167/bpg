@@ -10,8 +10,6 @@ point makePoint(intPoint coords, double amp) { return point(coords, amp); }
 FieldProvider GyroidPhaseProvider::generateInitialCondition(int gridSize) {
 
   // initialize field provider variables:
-
-  // Ny = 2 * Nx for hexagonal phase
   int* gridSizes = (int*) malloc(3 * sizeof(int));
   gridSizes[0] = gridSize;  gridSizes[1] = gridSize;  gridSizes[2] = gridSize;
 
@@ -27,19 +25,61 @@ FieldProvider GyroidPhaseProvider::generateInitialCondition(int gridSize) {
 
   // initialize data -
   fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-  // initialize values to zero
+  populateDataArray(data, numFieldElements, gridSizes);
+  
+  // create field provider object
+  FieldProvider initialCondition{
+    data,
+    m_dimension,
+    gridSizes,
+    dxVec,
+    real,
+    m_phaseID};
+
+  fftw_free(data);
+
+  return initialCondition;
+}
+
+void GyroidPhaseProvider::resetCondition(FieldProvider &field)
+{
+  // verify phaseID
+  const int phaseID = field.getPhaseID();
+  if (phaseID != m_phaseID)
+    throw std::runtime_error("Could not reset GYR phase - incorrect phase ID");
+
+  // unpack field provider
+  int* gridSizes         = field.getGridSizes();
+  int  numFieldElements  = field.getNumFieldElements();
+  fftw_complex* realData = field.getRealDataPointer();
+  
+  // set values of cplxData
+  populateDataArray(realData, numFieldElements, gridSizes);
+
+  // update cplx data
+  field.transformR2C();
+
+} // end resetCondition method
+
+void GyroidPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes)
+{
+  // set all array values to zero
   for (int index = 0; index < numFieldElements; index++) {
+    data[index][0] = 0.0;
     data[index][1] = 0.0;
   }
+
+  // compute real gyroid array values
+  double dx = m_period / gridSizes[0]; 
   double w = 2 * M_PI / m_period;
   double sum = 0.0;
-  for (int k = 0, index = 0; k < gridSize; k++) {
+  for (int k = 0, index = 0; k < gridSizes[0]; k++) {
     double z = k * dx;
 
-    for (int j = 0; j < gridSize; j++) {
+    for (int j = 0; j < gridSizes[1]; j++) {
       double y = j * dx;
 
-      for (int i = 0; i < gridSize; i++, index++) {
+      for (int i = 0; i < gridSizes[2]; i++, index++) {
         double x = i * dx;
 
         double val = sin(w * x) * cos(w * y) +
@@ -56,24 +96,9 @@ FieldProvider GyroidPhaseProvider::generateInitialCondition(int gridSize) {
     }
   }
 
+  // shift everything by avg. density
   double avDensity = sum / numFieldElements;
   for(int index = 0; index < numFieldElements; index++)
     data[index][0] += (m_avDensity - avDensity);
 
-  // create field provider object
-  FieldProvider initialCondition{
-    data,
-    m_dimension,
-    gridSizes,
-    dxVec,
-    real,
-    m_phaseID};
-
-  fftw_free(data);
-
-  return initialCondition;
-}
-
-void GyroidPhaseProvider::resetCondition(FieldProvider field)
-{
-}
+} // end populate array method

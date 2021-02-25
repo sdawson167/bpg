@@ -64,7 +64,21 @@ public:
 
     Phase getPhase();
 
+    int getPhaseID() { return m_phaseID; }
+
+    /*
+     * =======================================
+     *     Method to initialize field
+     * =======================================
+     */
     FieldProvider* generateInitialCondition();
+
+    /*
+     * ======================================
+     *  Method to reinitialize field values
+     * ======================================
+     */
+    void resetCondition(FieldProvider &field);
 
 };  // end class definition
 #endif

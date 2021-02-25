@@ -68,4 +68,62 @@ FieldProvider* GenericPhaseProvider::generateInitialCondition()
       return initialFieldProvider;
     }
   } // end switch
-}
+} // end generateInitialCondition
+
+void GenericPhaseProvider::resetCondition(FieldProvider &field)
+{
+  switch(m_phaseID) {
+    case 1: {
+      LamellarPhaseProvider lamProvider{ m_lamPeriod, m_avgDensity, m_amplitude };
+      lamProvider.resetCondition(field);
+      break;
+    }
+    case 2: {
+      GyroidPhaseProvider gyrProvider{ m_gyrPeriod, m_avgDensity, m_amplitude };
+      gyrProvider.resetCondition(field);
+      break;
+    }
+    case 3: {
+      CylindricalHexagonalPhaseProvider hexProvider{ m_hexPeriod, m_avgDensity, m_amplitude };
+      hexProvider.resetCondition(field);
+      break;
+    }
+    case 4: {
+      BccPhaseProvider bccProvider{ m_bccPeriod, m_avgDensity, m_amplitude };
+      bccProvider.resetCondition(field);
+      break;
+    }
+    case 5: {
+      FccPhaseProvider fccProvider{ m_fccPeriod, m_avgDensity, m_amplitude };
+      fccProvider.resetCondition(field);
+      break;
+    }
+    case 6: {
+      A15PhaseProvider a15Provider{ m_a15Period, m_avgDensity, m_amplitude };
+      a15Provider.resetCondition(field);
+      break;
+    }
+    case 7: {
+      SigmaPhaseProvider sigProvider{ m_sigPeriodX, m_sigPeriodZ, m_avgDensity, m_amplitude };
+      sigProvider.resetCondition(field);
+      break;
+    }
+    default: {
+      int phaseID = field.getPhaseID();
+      if (phaseID != m_phaseID)
+	throw std::runtime_error("Unable to reset DIS phase - wrong phase ID");
+      
+      int N = field.getNumFieldElements();
+      fftw_complex* realFieldData = field.getRealDataPointer();
+      fftw_complex* cplxFieldData = field.getCplxDataPointer();
+
+      for (int i = 0; i < N; i++) {
+	realFieldData[i][0] = 0.0;
+	realFieldData[i][1] = 0.0;
+
+	cplxFieldData[i][0] = 0.0;
+	cplxFieldData[i][1] = 0.0;
+      }
+    }
+  } // end switch
+} // end resetCondition

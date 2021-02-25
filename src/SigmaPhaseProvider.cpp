@@ -23,7 +23,51 @@ FieldProvider SigmaPhaseProvider::generateInitialCondition(int gridSize) {
   const bool real = false;
 
   // initialize data -
-  // set of fourier peaks from Kai's code:
+  fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
+  populateDataArray(data, numFieldElements, gridSizes);
+
+  // create field provider object
+  FieldProvider initialCondition{
+    data,
+    m_dimension,
+    gridSizes,
+    dqVec,
+    real,
+    m_phaseID};
+
+  fftw_free(data);
+
+  return initialCondition;
+}
+
+void SigmaPhaseProvider::resetCondition(FieldProvider &field)
+{
+  // verify phaseID
+  const int phaseID = field.getPhaseID();
+  if (phaseID != m_phaseID)
+    throw std::runtime_error("Could not reset SIG phase - incorrect phase ID");
+
+  // unpack field provider
+  int* gridSizes         = field.getGridSizes();
+  int  numFieldElements  = field.getNumFieldElements();
+  fftw_complex* cplxData = field.getCplxDataPointer();
+  
+  // set values of cplxData
+  populateDataArray(cplxData, numFieldElements, gridSizes);
+
+  // update real data
+  field.transformC2R();
+}
+
+void SigmaPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes)
+{
+  // set all array values to zero
+  for (int index = 0; index < numFieldElements; index++) {
+    data[index][0] = 0.0;
+    data[index][1] = 0.0;
+  }
+
+  // set of fourier peaks 
   typedef std::vector<int>    intPoint;
   typedef std::tuple<intPoint, double> point;
   std::vector<point> initVals;
@@ -307,39 +351,17 @@ FieldProvider SigmaPhaseProvider::generateInitialCondition(int gridSize) {
   initVals.push_back(makePoint( { 124, 127, 63 },  0.1662350));
   initVals.push_back(makePoint( { 125, 127, 63 }, -0.0340823));
 
-  fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-  // initialize values to zero
-  for (int index = 0; index < numFieldElements; index++) {
-    data[index][0] = 0.0;
-    data[index][1] = 0.0;
-  }
+  // populate non-zero elements of array
   for (std::vector<point>::iterator it = initVals.begin(); it != initVals.end(); it++) {
     std::vector<int> k = std::get<0>(*it);	  
     double	     u = std::get<1>(*it);
-
+                                                                                         
     int kz = k[2];
     int ky = k[1];
     int kx = k[0];
-
-    int index = kx + (N * ky) + (N * N * kz);
-
+                                                                                         
+    int index = kx + (gridSizes[2] * ky) + (gridSizes[2] * gridSizes[1] * kz);
+                                                                                         
     data[index][0] = u * m_amplitude;
   }
-
-  // create field provider object
-  FieldProvider initialCondition{
-    data,
-    m_dimension,
-    gridSizes,
-    dqVec,
-    real,
-    m_phaseID};
-
-  fftw_free(data);
-
-  return initialCondition;
-}
-
-void SigmaPhaseProvider::resetCondition(FieldProvider field)
-{
-}
+} // end populateDataArray method

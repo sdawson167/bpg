@@ -18,15 +18,10 @@ FieldProvider LamellarPhaseProvider::generateInitialCondition(int gridSize) {
   // initialize field in complex space:
   const bool real = false;
 
-  // initialize data - 1D cosine function:
+  // initialize data
   fftw_complex* data;
   data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * gridSize);
-  for (int index = 0; index < gridSize; index++) {
-    data[index][0] = 0.0;
-    data[index][1] = 0.0;
-  }
-  data[0][0] = m_avDensity;
-  data[1][0] = m_amplitude;
+  populateDataArray(data, gridSize, gridSizes);
 
   // create field provider object
   FieldProvider initialCondition{
@@ -42,6 +37,34 @@ FieldProvider LamellarPhaseProvider::generateInitialCondition(int gridSize) {
   return initialCondition;
 }
 
-void LamellarPhaseProvider::resetCondition(FieldProvider field)
+void LamellarPhaseProvider::resetCondition(FieldProvider &field)
 {
+  // verify phaseID
+  const int phaseID = field.getPhaseID();
+  if (phaseID != m_phaseID)
+    throw std::runtime_error("Could not reset LAM phase - incorrect phase ID");
+
+  // unpack field provider
+  int* gridSizes         = field.getGridSizes();
+  int  numFieldElements  = field.getNumFieldElements();
+  fftw_complex* cplxData = field.getCplxDataPointer();
+  
+  // set values of cplxData
+  populateDataArray(cplxData, numFieldElements, gridSizes);
+
+  // update cplx data
+  field.transformC2R();
+}
+
+void LamellarPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes)
+{
+  // set all array values to zero
+  for (int index = 0; index < numFieldElements; index++) {
+    data[index][0] = 0.0;
+    data[index][1] = 0.0;
+  }
+
+  // initialize lamellar phase - 1D cosine function
+  data[0][0] = m_avDensity;
+  data[1][0] = m_amplitude;
 }

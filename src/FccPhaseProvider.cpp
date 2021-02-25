@@ -22,39 +22,9 @@ FieldProvider FccPhaseProvider::generateInitialCondition(int gridSize) {
   // initialize field in complex space:
   const bool real = false;
 
-  // initialize data - set of fourier peaks
-  typedef std::vector<int>    intPoint;
-  typedef std::tuple<intPoint, double> point;
-  const double amp = m_amplitude;
-  std::vector<point> initVals;
-  initVals.push_back( makePoint( {  0,  0,  0}, m_avDensity));
-  initVals.push_back( makePoint( {  1,  1,  1}, amp/8 ));
-  initVals.push_back( makePoint( { -1,  1,  1}, amp/8 ));
-  initVals.push_back( makePoint( {  1, -1,  1}, amp/8 ));
-  initVals.push_back( makePoint( { -1, -1,  1}, amp/8 ));
-  initVals.push_back( makePoint( {  1,  1, -1}, amp/8 ));
-  initVals.push_back( makePoint( { -1,  1, -1}, amp/8 ));
-  initVals.push_back( makePoint( {  1, -1, -1}, amp/8 ));
-  initVals.push_back( makePoint( { -1, -1, -1}, amp/8 ));
-
+  // initialize data
   fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-  // initialize values to zero
-  for (int index = 0; index < numFieldElements; index++) {
-    data[index][0] = 0.0;
-    data[index][1] = 0.0;
-  }
-  for (std::vector<point>::iterator it = initVals.begin(); it != initVals.end(); it++) {
-    std::vector<int> k = std::get<0>(*it);	  
-    double	     u = std::get<1>(*it);
-    
-    int kz = k[2] < 0 ? k[2] + N : k[2];
-    int ky = k[1] < 0 ? k[1] + N : k[1];
-    int kx = k[0] < 0 ? k[0] + N : k[0];
-
-    int index = kx + (N * ky) + (N * N * kz);
-
-    data[index][0] = u;
-  }
+  populateDataArray(data, numFieldElements, gridSizes);
 
   // create field provider object
   FieldProvider initialCondition{
@@ -70,6 +40,59 @@ FieldProvider FccPhaseProvider::generateInitialCondition(int gridSize) {
   return initialCondition;
 }
 
-void FccPhaseProvider::resetCondition(FieldProvider field)
+void FccPhaseProvider::resetCondition(FieldProvider &field)
 {
+  // verify phaseID
+  const int phaseID = field.getPhaseID();
+  if (phaseID != m_phaseID)
+    throw std::runtime_error("Could not reset FCC phase - incorrect phase ID");
+
+  // unpack field provider
+  int* gridSizes         = field.getGridSizes();
+  int  numFieldElements  = field.getNumFieldElements();
+  fftw_complex* cplxData = field.getCplxDataPointer();
+  
+  // set values of cplxData
+  populateDataArray(cplxData, numFieldElements, gridSizes);
+
+  // update real data
+  field.transformC2R();
 }
+
+void FccPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes)
+{
+  // reset all array values to zero
+  for (int index = 0; index < numFieldElements; index++) {
+    data[index][0] = 0.0;
+    data[index][1] = 0.0;
+  }
+
+  // initialize data - set of fourier peaks
+  typedef std::vector<int>    intPoint;
+  typedef std::tuple<intPoint, double> point;
+  const double amp = m_amplitude;
+  std::vector<point> initVals;
+  initVals.push_back( makePoint( {  0,  0,  0}, m_avDensity));
+  initVals.push_back( makePoint( {  1,  1,  1}, amp/8 ));
+  initVals.push_back( makePoint( { -1,  1,  1}, amp/8 ));
+  initVals.push_back( makePoint( {  1, -1,  1}, amp/8 ));
+  initVals.push_back( makePoint( { -1, -1,  1}, amp/8 ));
+  initVals.push_back( makePoint( {  1,  1, -1}, amp/8 ));
+  initVals.push_back( makePoint( { -1,  1, -1}, amp/8 ));
+  initVals.push_back( makePoint( {  1, -1, -1}, amp/8 ));
+  initVals.push_back( makePoint( { -1, -1, -1}, amp/8 ));
+
+  // set non-zero array elements using peaks above
+  for (std::vector<point>::iterator it = initVals.begin(); it != initVals.end(); it++) {
+    std::vector<int> k = std::get<0>(*it);	  
+    double	     u = std::get<1>(*it);
+    
+    int kz = k[2] < 0 ? k[2] + gridSizes[0] : k[2];
+    int ky = k[1] < 0 ? k[1] + gridSizes[1] : k[1];
+    int kx = k[0] < 0 ? k[0] + gridSizes[2] : k[0];
+
+    int index = kx + (gridSizes[2] * ky) + (gridSizes[2] * gridSizes[1] * kz);
+
+    data[index][0] = u;
+  }
+} // end of populateDataArray method

@@ -101,10 +101,16 @@ public:
     void setData( fftw_complex* data, bool real )
     {
       if (real) {
-        m_realData = std::move(data);
+	for (int i = 0; i < m_numFieldElements; i++) {
+	  m_realData[i][0] = data[i][0];
+	  m_realData[i][1] = data[i][1];
+	}
         transformR2C();
       } else {
-        m_cplxData = std::move(data);
+	for (int i = 0; i < m_numFieldElements; i++) {
+	  m_cplxData[i][0] = data[i][0];
+	  m_cplxData[i][1] = data[i][1];
+	}
         transformC2R();
       }
     }

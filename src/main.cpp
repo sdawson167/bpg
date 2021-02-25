@@ -69,7 +69,7 @@ int main(int argc, char** argv)
       inString = argv[2];
       inFileName = "/home/sdawson/projects/def-shi/sdawson/BPG/" + inString;
     }
-    
+
     // open file
     std::ifstream inFile;
     inFile.open(inFileName); 
@@ -78,14 +78,22 @@ int main(int argc, char** argv)
       return 1;
     }
 
+    // get phaseID from remaining input args
+    if (argc < 4) {
+      std::cout << "please choose one or more phases (1-7) to compute" << std::endl;
+      return 1;
+    }
+
+    for (int p = 3; p < argc; p++) 
+      phaseIdList.push_back(std::atoi(argv[p]));
+    
     // read input params from file and store in paramList object
     std::string line;
     while (std::getline(inFile,line)) 
     {
       std::vector<std::string> brokenLine = divideWords(line);
-      phaseIdList.push_back(std::stoi(brokenLine[0]));
       param otherParams;
-      for (size_t index = 1; index < brokenLine.size(); index++) 
+      for (size_t index = 0; index < brokenLine.size(); index++) 
 	otherParams.push_back(stof(brokenLine[index]));
       
       phasePoints.push_back(otherParams);
@@ -99,7 +107,7 @@ int main(int argc, char** argv)
     }
 
     if (argc != 5) {
-      std::cout << "incorrect no. of input params for Lb model" << std::endl;
+      std::cout << "incorrect no. of input params for Lb model, need: phaseID, tau, gamma" << std::endl;
       return 1;
     }
 
@@ -123,24 +131,13 @@ int main(int argc, char** argv)
     // get phaseID
     int phaseID = *idIter;
 
-    // initialize phase
+    // create field-provider object and initialize phase
     GenericPhaseProvider provider(phaseID);
     FieldProvider *field = provider.generateInitialCondition();
-
-    // need to reset initialization if convergence fails
-    bool convergenceFlag = true;
 
     // loop through phase points - compute free-energy at each point
     for (paramList::const_iterator it = phasePoints.begin(); it != phasePoints.end(); it++)
     {
-      // check if convergence was achieved at last point - if not, need to reset initial condition
-      /*
-      if (!convergenceFlag){
-        // reset initial condition
-	provider.resetField(*field);
-      }
-      */
-
       // get phasePoint
       std::vector<double> otherParams = *it;
 
@@ -150,16 +147,18 @@ int main(int argc, char** argv)
       LbFunctionalCalculator calculator(tau, gamma);
 
       std::cout << std::setprecision(10);
-      
       try {
         minimizer.minimize(*field, calculator);
         std::cout << calculator.f(*field) << std::endl;
-	convergenceFlag = true;
       } catch (...) {
         std::cout << 100 << std::endl;
-	convergenceFlag = false;
       } 
+      
+      // reset initial condition
+      provider.resetCondition(*field);
+
     } // end loop over phase points
+    
     delete(field);
   } // end loop over phases
 

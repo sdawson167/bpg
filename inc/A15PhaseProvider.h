@@ -55,6 +55,13 @@ public:
      *	       reset field provider
      * ======================================
      */
-    void resetCondition(FieldProvider field);
+    void resetCondition(FieldProvider &field);
+
+    /* 
+     * ======================================
+     *   
+     * ======================================
+     */
+    void populateDataArray(fftw_complex* cplxData, int numFieldElements, int* gridSizes);
 };
 #endif

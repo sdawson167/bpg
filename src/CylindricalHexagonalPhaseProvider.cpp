@@ -25,32 +25,8 @@ FieldProvider CylindricalHexagonalPhaseProvider::generateInitialCondition(int gr
   const bool real = false;
 
   // initialize data -
-  // set of fourier peaks from Kai's code:
-  std::vector<point> initVals;
-  initVals.push_back( makePoint({ 1,  2}, 1.0/6 ));
-  initVals.push_back( makePoint({-1,  2}, 1.0/6 ));
-  initVals.push_back( makePoint({ 1, -2}, 1.0/6 ));
-  initVals.push_back( makePoint({-1, -2}, 1.0/6 ));
-  initVals.push_back( makePoint({ 0,  4}, 1.0/6 ));
-  initVals.push_back( makePoint({ 0, -4}, 1.0/6 ));
-
   fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-  // initialize values to zero
-  for (int index = 0; index < numFieldElements; index++) {
-    data[index][0] = 0.0;
-    data[index][1] = 0.0;
-  }
-  for (std::vector<point>::iterator it = initVals.begin(); it != initVals.end(); it++) {
-    std::vector<int> k = std::get<0>(*it);	  
-    double	     u = std::get<1>(*it);
-
-    int ky = k[1] < 0 ? k[1] + 2 * N : k[1];
-    int kx = k[0] < 0 ? k[0] + N : k[0];
-
-    int index = kx + (N * ky);
-
-    data[index][0] = u;
-  }
+  populateDataArray(data, numFieldElements, gridSizes);
 
   // create field provider object
   FieldProvider initialCondition{
@@ -64,8 +40,55 @@ FieldProvider CylindricalHexagonalPhaseProvider::generateInitialCondition(int gr
   fftw_free(data);
 
   return initialCondition;
-}
+} // end of generateInitialCondition method
 
-void CylindricalHexagonalPhaseProvider::resetCondition(FieldProvider field)
+void CylindricalHexagonalPhaseProvider::resetCondition(FieldProvider &field)
 {
-}
+  // verify phaseID
+  const int phaseID = field.getPhaseID();
+  if (phaseID != m_phaseID)
+    throw std::runtime_error("Could not reset HEX phase - incorrect phase ID");
+
+  // unpack field provider
+  int* gridSizes         = field.getGridSizes();
+  int  numFieldElements  = field.getNumFieldElements();
+  fftw_complex* cplxData = field.getCplxDataPointer();
+  
+  // set values of cplxData
+  populateDataArray(cplxData, numFieldElements, gridSizes);
+
+  // update real data
+  field.transformC2R();
+} // end of resetCondition method
+
+void CylindricalHexagonalPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes)
+{
+  // set all array values to zero
+  for (int index = 0; index < numFieldElements; index++) {
+    data[index][0] = 0.0;
+    data[index][1] = 0.0;
+  }
+  
+  // set of fourier peaks
+  std::vector<point> initVals;
+  initVals.push_back( makePoint({ 1,  2}, 1.0/6 ));
+  initVals.push_back( makePoint({-1,  2}, 1.0/6 ));
+  initVals.push_back( makePoint({ 1, -2}, 1.0/6 ));
+  initVals.push_back( makePoint({-1, -2}, 1.0/6 ));
+  initVals.push_back( makePoint({ 0,  4}, 1.0/6 ));
+  initVals.push_back( makePoint({ 0, -4}, 1.0/6 ));
+
+  // initialize non-zero array values using peaks
+  for (std::vector<point>::iterator it = initVals.begin(); it != initVals.end(); it++) {
+    std::vector<int> k = std::get<0>(*it);	  
+    double	     u = std::get<1>(*it);
+
+    int ky = k[1] < 0 ? k[1] + gridSizes[0] : k[1];
+    int kx = k[0] < 0 ? k[0] + gridSizes[1] : k[0];
+
+    int index = kx + (gridSizes[1] * ky);
+
+    data[index][0] = u;
+  }
+
+} // end populateDataArray method

@@ -69,9 +69,15 @@ public:
       // increment iterator
       m_iterator++;
 
+      std::cout << std::endl << "starting iteration " << m_iterator << std::endl;
+
+      std::cout << "free-energy before opt. " << fNew << std::endl;
+
+      std::cout << "optimizing field" << std::endl;
       // optimize field (fixed period)
       optimizeField(field, calculator);
       
+      std::cout << "optimizing period" << std::endl;
       // optimize period (fixed densities)
       optimizePeriods(field, calculator);
 
@@ -81,6 +87,8 @@ public:
 
       // update error
       currentError = fNew - fOld;
+      std::cout << "free-energy after optimization " << fNew << std::endl;
+      std::cout << "current error " << currentError << std::endl;
 
       // update stop criterion
       if (std::abs(currentError) < m_errorTolerance || m_iterator == m_maxIterations)
