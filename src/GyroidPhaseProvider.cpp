@@ -16,16 +16,14 @@ FieldProvider GyroidPhaseProvider::generateInitialCondition(int gridSize) {
   const int numFieldElements = gridSize * gridSize * gridSize;
 
   // grid spacing based on period (box size)
-  const double dx = m_period / gridSize;
   double* dxVec = (double*) malloc(3 * sizeof(double));
-  dxVec[0] = dx;  dxVec[1] = dx;  dxVec[2] = dx;
 
   // initialize field in real space:
   const bool real = true;
 
   // initialize data -
   fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-  populateDataArray(data, numFieldElements, gridSizes);
+  populateDataArray(dxVec, data, numFieldElements, gridSizes);
   
   // create field provider object
   FieldProvider initialCondition{
@@ -51,18 +49,23 @@ void GyroidPhaseProvider::resetCondition(FieldProvider &field)
   // unpack field provider
   int* gridSizes         = field.getGridSizes();
   int  numFieldElements  = field.getNumFieldElements();
+  double* dxVec		 = field.getDx();
   fftw_complex* realData = field.getRealDataPointer();
   
   // set values of cplxData
-  populateDataArray(realData, numFieldElements, gridSizes);
+  populateDataArray(dxVec, realData, numFieldElements, gridSizes);
+  field.updateDq();
 
   // update cplx data
   field.transformR2C();
 
 } // end resetCondition method
 
-void GyroidPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes)
+void GyroidPhaseProvider::populateDataArray(double* dxVec, fftw_complex* data, int numFieldElements, int* gridSizes)
 {
+  const double dx = m_period / gridSizes[0];
+  dxVec[0] = dx; dxVec[1] = dx; dxVec[2] = dx;
+
   // set all array values to zero
   for (int index = 0; index < numFieldElements; index++) {
     data[index][0] = 0.0;
@@ -70,7 +73,6 @@ void GyroidPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElem
   }
 
   // compute real gyroid array values
-  double dx = m_period / gridSizes[0]; 
   double w = 2 * M_PI / m_period;
   double sum = 0.0;
   for (int k = 0, index = 0; k < gridSizes[0]; k++) {

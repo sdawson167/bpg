@@ -6,15 +6,15 @@
 #include <utility>
 #include <cstring>
 #include <fstream>
-#include <sys/time.h>
 #include <cmath>
+#include <chrono>
 
 #include "fftw3.h"
 
 #include "BpgMinimizer.h"
 #include "FieldProvider.h"
 #include "GenericProvider.h"
-#include "LbFunctionalCalculator.h"
+#include "OkFunctionalCalculator.h"
 
 std::vector<std::string> divideWords(std::string str)
 {
@@ -106,17 +106,19 @@ int main(int argc, char** argv)
       return 1;
     }
 
-    if (argc != 5) {
-      std::cout << "incorrect no. of input params for Lb model, need: phaseID, tau, gamma" << std::endl;
+    if (argc < 5) {
+      std::cout << "incorrect no. of input params for Ok model, need: tau, gamma, phaseID(s)" << std::endl;
       return 1;
     }
 
-    phaseIdList.push_back(std::atoi(argv[2]));
     param otherParams;
-    for (int index = 3; index < 5; index++) 
+    for (int index = 2; index < 4; index++) 
       otherParams.push_back(std::atof(argv[index]));
     
     phasePoints.push_back(otherParams);
+
+    for (int index = 4; index < argc; index++)
+      phaseIdList.push_back(std::atoi(argv[index]));
 
   } else {
     std::cout << "input mode must be 1 (read from file) or 2 (read from command line)" << std::endl;
@@ -124,7 +126,7 @@ int main(int argc, char** argv)
   }
   
   // initialize minimizer object
-  BpgMinimizer<LbFunctionalCalculator> minimizer(1e-8, 1000);
+  BpgMinimizer<OkFunctionalCalculator> minimizer(1e-8, 15);
 
   // loop through phases
   for (std::vector<int>::const_iterator idIter = phaseIdList.begin(); idIter != phaseIdList.end(); idIter++) { 
@@ -144,16 +146,25 @@ int main(int argc, char** argv)
       // initialize calculator
       double tau   = otherParams[0];
       double gamma = otherParams[1];
-      LbFunctionalCalculator calculator(tau, gamma);
+      OkFunctionalCalculator calculator(tau, gamma);
 
       std::cout << std::setprecision(10);
+      //auto start = std::chrono::steady_clock::now();
+      
       try {
         minimizer.minimize(*field, calculator);
         std::cout << calculator.f(*field) << std::endl;
+   
       } catch (...) {
         std::cout << 100 << std::endl;
       } 
-      
+
+      /*
+      auto end = std::chrono::steady_clock::now();
+      std::cout << "elapsed time: " 
+	        << std::chrono::duration_cast<std::chrono::seconds>(end - start).count()
+		<< std::endl;                                                                 
+		*/
       // reset initial condition
       provider.resetCondition(*field);
 

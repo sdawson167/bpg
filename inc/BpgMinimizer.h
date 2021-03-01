@@ -21,7 +21,9 @@ class BpgMinimizer {
 
 private:
   double m_errorTolerance;	// used for convergence test
-  int	 m_maxIterations;	// used to limit no. of iterations
+  int	 m_maxIterations;	// used to limit total no. of iterations
+  int    m_maxFieldIterations  = 1000; // max iterations of field opt. algorithm
+  int    m_maxPeriodIterations = 1000; // max iterations of period opt. algorithm
   int 	 m_iterator;		// used to track total iterations (alternating field/period optimization)
   int 	 m_fieldIterator;	// used to track no. of iterations of field minimization alg.
   int	 m_periodIterator;	// used to track no. of iterations of period optimization alg.
@@ -69,15 +71,15 @@ public:
       // increment iterator
       m_iterator++;
 
-      std::cout << std::endl << "starting iteration " << m_iterator << std::endl;
+      //std::cout << std::endl << "starting iteration " << m_iterator << std::endl;
 
-      std::cout << "free-energy before opt. " << fNew << std::endl;
+      //std::cout << "free-energy before opt. " << fNew << std::endl;
 
-      std::cout << "optimizing field" << std::endl;
+      //std::cout << "optimizing field" << std::endl;
       // optimize field (fixed period)
       optimizeField(field, calculator);
       
-      std::cout << "optimizing period" << std::endl;
+      //std::cout << "optimizing period" << std::endl;
       // optimize period (fixed densities)
       optimizePeriods(field, calculator);
 
@@ -87,8 +89,8 @@ public:
 
       // update error
       currentError = fNew - fOld;
-      std::cout << "free-energy after optimization " << fNew << std::endl;
-      std::cout << "current error " << currentError << std::endl;
+      //std::cout << "free-energy after optimization " << fNew << std::endl;
+      //std::cout << "current error " << currentError << std::endl;
 
       // update stop criterion
       if (std::abs(currentError) < m_errorTolerance || m_iterator == m_maxIterations)
@@ -274,7 +276,7 @@ public:
       theta = newTheta;  
 
       // update stop criterion
-      if (m_fieldIterator == m_maxIterations || std::abs(currentError) < m_errorTolerance)
+      if (m_fieldIterator == m_maxFieldIterations || std::abs(currentError) < m_errorTolerance)
         stopCriterion = true;
 
     } // end of while loop
@@ -284,7 +286,7 @@ public:
      */
 
     // if we've reached the max no. of iterations, throw an error
-    if (m_fieldIterator == m_maxIterations)
+    if (m_fieldIterator == m_maxFieldIterations)
       throw std::runtime_error("maximum iterations reached in field optimization");
 
     // free laplacian and quad coefficent arrays
@@ -398,12 +400,12 @@ public:
       else posFlag = false;
 
       // update stop criterion
-      if (std::abs(currentError) < m_errorTolerance || m_periodIterator == m_maxIterations)
+      if (std::abs(currentError) < m_errorTolerance || m_periodIterator == m_maxPeriodIterations)
         stopCriterion = true;
     } // end while loop
 
     // if we've reached maximum iterations throw an error
-    if (m_periodIterator == m_maxIterations)
+    if (m_periodIterator == m_maxPeriodIterations)
       throw std::runtime_error("maximum iterations reached in period optimization");
 
     // repackage reciprocal lattice vector b into format that field-provider likes

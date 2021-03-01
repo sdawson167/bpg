@@ -14,19 +14,15 @@ FieldProvider CylindricalHexagonalPhaseProvider::generateInitialCondition(int gr
   gridSizes[0] = 2 * N; gridSizes[1] = N;
 
   const int numFieldElements = 2 * N * N;
-
-  // grid spacing based on period (box size)
-  const double dqx = 2 * M_PI / m_period;
-  const double dqy = 2 * M_PI / (2 * sqrt(3) * m_period);
+  
   double* dq = (double*) malloc(2 * sizeof(double));
-  dq[0] = dqy;  dq[1] = dqx;
 
   // initialize field in complex space:
   const bool real = false;
 
   // initialize data -
   fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-  populateDataArray(data, numFieldElements, gridSizes);
+  populateDataArray(dq, data, numFieldElements, gridSizes);
 
   // create field provider object
   FieldProvider initialCondition{
@@ -52,17 +48,24 @@ void CylindricalHexagonalPhaseProvider::resetCondition(FieldProvider &field)
   // unpack field provider
   int* gridSizes         = field.getGridSizes();
   int  numFieldElements  = field.getNumFieldElements();
+  double* dqVec		 = field.getDq();
   fftw_complex* cplxData = field.getCplxDataPointer();
   
   // set values of cplxData
-  populateDataArray(cplxData, numFieldElements, gridSizes);
+  populateDataArray(dqVec, cplxData, numFieldElements, gridSizes);
+  field.updateDx();
 
   // update real data
   field.transformC2R();
 } // end of resetCondition method
 
-void CylindricalHexagonalPhaseProvider::populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes)
+void CylindricalHexagonalPhaseProvider::populateDataArray(double* dqVec, fftw_complex* data, int numFieldElements, int* gridSizes)
 {
+  // grid spacing based on period (box size)
+  const double dqx = 2 * M_PI / m_period;
+  const double dqy = 2 * M_PI / (2 * sqrt(3) * m_period);
+  dqVec[0] = dqy; dqVec[1] = dqx;
+
   // set all array values to zero
   for (int index = 0; index < numFieldElements; index++) {
     data[index][0] = 0.0;

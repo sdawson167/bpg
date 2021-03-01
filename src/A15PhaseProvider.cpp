@@ -15,16 +15,14 @@ FieldProvider A15PhaseProvider::generateInitialCondition(int gridSize) {
   const int numFieldElements = N * N * N;
 
   // grid spacing based on period (box size)
-  const double dq = 2 * M_PI / m_period;
   double* dqVec = (double*) malloc(3 * sizeof(double));
-  dqVec[0] = dq; dqVec[1] = dq; dqVec[2] = dq;
 
   // initialize field in complex space:
   const bool real = false;
 
   // initialize cplx data array:
   fftw_complex* data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * numFieldElements);
-  populateDataArray(data, numFieldElements, gridSizes);
+  populateDataArray(dqVec, data, numFieldElements, gridSizes);
 
   // create field provider object
   FieldProvider initialCondition{
@@ -50,17 +48,25 @@ void A15PhaseProvider::resetCondition(FieldProvider &field)
   // unpack field provider
   int* gridSizes         = field.getGridSizes();
   int  numFieldElements  = field.getNumFieldElements();
+  double* dqVec 	 = field.getDq(); 
   fftw_complex* cplxData = field.getCplxDataPointer();
   
   // set values of cplxData
-  populateDataArray(cplxData, numFieldElements, gridSizes);
+  populateDataArray(dqVec, cplxData, numFieldElements, gridSizes);
+  field.updateDx();
 
   // update real data
   field.transformC2R();
 }
 
-void A15PhaseProvider::populateDataArray(fftw_complex* cplxData, int numFieldElements, int* gridSizes)
+void A15PhaseProvider::populateDataArray(double* dqVec, fftw_complex* cplxData, int numFieldElements, int* gridSizes)
 {
+  // reset grid spacing:
+  double dq = 2 * M_PI / m_period;
+  dqVec[0] = dq;
+  dqVec[1] = dq;
+  dqVec[2] = dq;
+
   // set all values in cplxData to zero
   for (int index = 0; index < numFieldElements; index++) {
     cplxData[index][0] = 0.0;

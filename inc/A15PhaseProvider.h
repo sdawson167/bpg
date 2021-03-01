@@ -62,6 +62,6 @@ public:
      *   
      * ======================================
      */
-    void populateDataArray(fftw_complex* cplxData, int numFieldElements, int* gridSizes);
+    void populateDataArray(double* dqVec, fftw_complex* cplxData, int numFieldElements, int* gridSizes);
 };
 #endif

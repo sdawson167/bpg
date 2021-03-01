@@ -37,14 +37,6 @@ private:
     
     int m_phaseID;	// field knows which phase it's initialized to - used for reset
 
-    void updateDq() {
-      for (int d = 0; d < m_dimension; d++) m_dq[d] = 2 * M_PI / (m_dx[d] * m_gridSizes[d]);
-    }
-
-    void updateDx() {
-      for (int d = 0; d < m_dimension; d++) m_dx[d] = 2 * M_PI / (m_dq[d] * m_gridSizes[d]);
-    }
-
     double cplxMagnitude(fftw_complex x) { return (x[0] * x[0]) + (x[1] * x[1]); }
 
 public:
@@ -136,6 +128,14 @@ public:
       free(m_dq);
       m_dq = dq;
       updateDx();
+    }
+
+    void updateDq() {
+      for (int d = 0; d < m_dimension; d++) m_dq[d] = 2 * M_PI / (m_dx[d] * m_gridSizes[d]);
+    }
+                                                                                             
+    void updateDx() {
+      for (int d = 0; d < m_dimension; d++) m_dx[d] = 2 * M_PI / (m_dq[d] * m_gridSizes[d]);
     }
 
     // get phase ID

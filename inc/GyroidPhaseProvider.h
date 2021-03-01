@@ -58,6 +58,6 @@ public:
      *      initialize array elements
      * ======================================
      */
-    void populateDataArray(fftw_complex* data, int numFieldElements, int* gridSizes);
+    void populateDataArray(double* dxVec, fftw_complex* data, int numFieldElements, int* gridSizes);
 };
 #endif
