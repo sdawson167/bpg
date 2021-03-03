@@ -5,8 +5,23 @@
 #include "fftw3.h"
 
 /*
- * Class contains information about the landau-brazovskii free-energy functional
+ * Class represents the Ohta-Kawasaki free-energy functional
+ * Functional has the form
+ *   fTotal = fQuad + fNl
+ * where fNl is the 'non-linear' part (computed in real space) which has the form 
+ *   fNl = (tau/2) * phi(r)^2 - (gamma/3!) * phi^3 + (1/4!) * phi^4  
+ * and fQuad is the (remaining) quadratic part (computed in cplx space) which has the form
+ *   fQuad = Gamma(q^2) * phi(q)^2
+ * The quadratic coefficient Gamma(q^2) is what defines the Ohta-Kawasaki functional
+ * it has the form
+ *   Gamma(q^2) = q^2 + 1/q^2 - 2 
+ *
+ * parameters:
+ *   tau   -- quadratic coefficient for nl part of free-energy
+ *   gamma -- cubic coefficient for nl part of free-energy
  */
+
+
 
 class OkFunctionalCalculator {
 

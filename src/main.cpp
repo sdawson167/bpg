@@ -14,34 +14,63 @@
 #include "BpgMinimizer.h"
 #include "FieldProvider.h"
 #include "GenericProvider.h"
-#include "OkFunctionalCalculator.h"
 
-std::vector<std::string> divideWords(std::string str)
-{
-  using namespace std;
-  string w = "";
-  vector<string> strVec;
-  for (auto c : str)
-  {
-    if (c == ' ') {
-      strVec.push_back(w);
-      w = "";
-    } else {
-      w = w + c;
-    }
-  }
-  strVec.push_back(w);
-  return strVec;
-}
+#include "LbFunctionalCalculator.h"
+#include "OkFunctionalCalculator.h"
+#include "PwFunctionalCalculator.h"
+
+std::vector<std::string> divideWords(std::string str);
 
 int main(int argc, char** argv)
 {
-  // determine form of input arguments:
+
+  /*
+   * =============================================================
+   *     Parse input args - determine which calculation to do
+   * =============================================================
+   */
+
+  // choose model - LB, OK, PW
+  // if model is not chosen as input arg, give user option to enter it:
+  std::string model;
+  if (argc > 1) model = argv[1];
+  else {
+    std::cout << "choose model: LB, OK, or PW" << std::endl;
+    std::getline(std::cin, model);
+    std::cin.clear();
+  }
+
+  // verify model choice is valid
+  if ( model != "LB" && model != "OK" && model != "PW") {
+    std::cout << "first input arg. is invalid - user must choose LB, OK, or PW" << std::endl;
+    return 1;
+  }
+
+  // depending on chosen model paramNumber checks that we are given enough parametsr
+  int paramNumber = 0;
+  if (model == "LB") paramNumber = 2;      // LB model: tau, gamma
+  else if (model == "OK") paramNumber = 2; // OK model: tau, gamma
+  else if (model == "PW") paramNumber = 4; // PW model: tau, gamma, lam1, lam2
+
+  // determine form of input arguments - input file (1) or command line (2):
   int inMode;
-  if (argc > 1) inMode = std::atoi(argv[1]);
+  if (argc > 2) inMode = std::atoi(argv[2]);
   else
   {
-    std::cout << "please choose input mode: 1 (input file) or 2 (command line input)" << std::endl;
+    std::string input;
+    std::cout << "choose input mode: 1 (input file) or 2 (command line input)" << std::endl;
+    std::getline(std::cin, input);
+    
+    std::stringstream stream(input);
+    if (!(stream >> inMode)) {
+      std::cout << "second input arg is invalid - choose 1 or 2" << std::endl;
+      return 1;
+    }
+    std::cin.clear();
+  }
+  // verify choice of input mode is valid
+  if (inMode != 1 && inMode != 2) {
+    std::cout << "second input arg is invalid - choose 1 or 2" << std::endl;
     return 1;
   }
 
@@ -58,75 +87,159 @@ int main(int argc, char** argv)
   // initialize all points on which calculation will be done
   paramList phasePoints;
   std::vector<int> phaseIdList;
+
+  // if we chose to initialize from file:
   if (inMode == 1)
   {
     // get name of file
     std::string inString, inFileName;
-    if (argc < 3) {
-      std::cout << "please enter name of input file" << std::endl;
-      return 1;
-    } else {
-      inString = argv[2];
-      inFileName = "/home/sdawson/projects/def-shi/sdawson/BPG/" + inString;
-    }
+    if (argc < 4) {
+      std::cout << "enter name of input file" << std::endl;
+      std::getline(std::cin, inString);
+      std::cin.clear();
+    } else 
+      inString = argv[3];
+      
+    inFileName = "/home/sdawson/projects/def-shi/sdawson/BPG/" + inString;
 
     // open file
     std::ifstream inFile;
     inFile.open(inFileName); 
+    // verify open:
     if (!inFile) {
       std::cout << "could not read input file " << inFileName << std::endl;
       return 1;
     }
-
-    // get phaseID from remaining input args
-    if (argc < 4) {
-      std::cout << "please choose one or more phases (1-7) to compute" << std::endl;
-      return 1;
-    }
-
-    for (int p = 3; p < argc; p++) 
-      phaseIdList.push_back(std::atoi(argv[p]));
     
     // read input params from file and store in paramList object
     std::string line;
     while (std::getline(inFile,line)) 
     {
       std::vector<std::string> brokenLine = divideWords(line);
+      if ((int) brokenLine.size() != paramNumber) {
+        std::cout << "invalid parameter file for " << model << " model, file must provide " << paramNumber << " input params per line" << std::endl;
+        return 1;
+      }
       param otherParams;
       for (size_t index = 0; index < brokenLine.size(); index++) 
-	otherParams.push_back(stof(brokenLine[index]));
+        otherParams.push_back(stof(brokenLine[index]));
       
       phasePoints.push_back(otherParams);
     }
 
-  } else if (inMode == 2) {
+    // now get phaseIDs - list of phases to optimize:
+    if (argc < 5 ) {
+      std::cout << "choose phases (1 - 7) to optimize, enter any non-numerical character to finish:" << std::endl;
 
-    if (argc < 3) {
-      std::cout << "please enter input params" << std::endl;
-      return 1;
-    }
-
-    if (argc < 5) {
-      std::cout << "incorrect no. of input params for Ok model, need: tau, gamma, phaseID(s)" << std::endl;
-      return 1;
-    }
-
-    param otherParams;
-    for (int index = 2; index < 4; index++) 
-      otherParams.push_back(std::atof(argv[index]));
+      int phaseID;
+      std::string input;
+      bool readInFlag = true;
+      while (std::getline(std::cin, input)) {
     
+        std::vector<std::string> dividedInput = divideWords(input);
+    
+        for (size_t index = 0; index < dividedInput.size(); index++) {
+          std::stringstream stream(dividedInput[index]);
+                                                                                                               
+          if (stream >> phaseID) {
+            if (phaseID > 0 && phaseID < 8)
+              phaseIdList.push_back(phaseID);
+          } else 
+            readInFlag = false;
+        }
+        if (!readInFlag)
+          break;
+      }
+  
+      // make sure we have at least one phase:  
+      if (phaseIdList.size() == 0) {
+        std::cout << "user must choose 1 or more phases to optimize" << std::endl;
+        return 1;
+      }
+      std::cin.clear();
+                                                                                                               
+    } else {
+      for (int p = 4; p < argc; p++) 
+        phaseIdList.push_back(std::atoi(argv[p]));
+    }
+
+  // end inMode = 1 case 
+
+  // inMode = 2: read input params (tau, gamma, ...) and list of phaseIDs from command line:
+  } else if (inMode == 2) {
+    
+    // first, get input params (tau, gamma, ...):
+    param otherParams;
+    if (argc < (3 + paramNumber) ) {
+      std::cout << "enter " << paramNumber << " input params required by " << model << " model:" << std::endl;
+      
+      double x;
+      std::string input;
+      int n = 0;
+      while (std::getline(std::cin, input)) {
+        
+	std::vector<std::string> dividedInput = divideWords(input);
+	
+	for (size_t index = 0; index < dividedInput.size(); index++) {
+          std::stringstream stream(dividedInput[index]);
+	  
+	  if (stream >> x) {
+	    if (n < paramNumber) {
+	      otherParams.push_back(x);
+	      n++;
+	    } 
+	  
+	  } 
+	}
+
+	if (n == paramNumber)
+          break;
+      }
+      
+      std::cin.clear();
+    
+    } else {
+      for (int index = 3; index < (3 + paramNumber); index++) 
+      otherParams.push_back(std::atof(argv[index])); 
+    }
     phasePoints.push_back(otherParams);
 
-    for (int index = 4; index < argc; index++)
-      phaseIdList.push_back(std::atoi(argv[index]));
+    // now get phaseIDs - list of phases to optimize:
+    if (argc < (3 + paramNumber + 1) ) {
+      std::cout << "choose phases (1 - 7) to optimize, enter any non-numerical character to finish:" << std::endl;
+    
+      int phaseID;
+      std::string input;
+      bool readInFlag = true;
+      while (std::getline(std::cin, input)) {
+        
+	std::vector<std::string> dividedInput = divideWords(input);
+	
+	for (size_t index = 0; index < dividedInput.size(); index++) {
+	  std::stringstream stream(dividedInput[index]);
 
-  } else {
-    std::cout << "input mode must be 1 (read from file) or 2 (read from command line)" << std::endl;
-    return 1;
-  }
-  
-  // initialize minimizer object
-  BpgMinimizer<OkFunctionalCalculator> minimizer(1e-8, 15);
+	  if (stream >> phaseID) {
+	    if (phaseID > 0 && phaseID < 8)
+              phaseIdList.push_back(phaseID);
+	  } else 
+	    readInFlag = false;
+	}
+	if (!readInFlag)
+	  break;
+      }
+      
+      // make sure we have at least one phase:  
+      if (phaseIdList.size() == 0) {
+        std::cout << "user must choose 1 or more phases to optimize" << std::endl;
+        return 1;
+      }
+      std::cin.clear();
+
+    } else {
+      for (int p = (3 + paramNumber); p < argc; p++)
+        phaseIdList.push_back(std::atoi(argv[p]));
+    }
+  } // end inMode = 2 case
 
   // loop through phases
   for (std::vector<int>::const_iterator idIter = phaseIdList.begin(); idIter != phaseIdList.end(); idIter++) { 
@@ -143,35 +256,135 @@ int main(int argc, char** argv)
       // get phasePoint
       std::vector<double> otherParams = *it;
 
-      // initialize calculator
+      // get tau/gamma values - used for all models!
       double tau   = otherParams[0];
       double gamma = otherParams[1];
-      OkFunctionalCalculator calculator(tau, gamma);
 
-      std::cout << std::setprecision(10);
-      //auto start = std::chrono::steady_clock::now();
+      // minimization parameters - used for all models
+      double errorTol = 1e-8;
+      int    maxIter  = 15;
+      // ensure we don't print more digits of precision than we know:
+      std::cout << std::fixed;
+      std::cout << std::setprecision(8);
+
+      // code timing stuff
+      // auto start = std::chrono::steady_clock::now();
+
+      // this part depends on the choice of model
       
-      try {
-        minimizer.minimize(*field, calculator);
-        std::cout << calculator.f(*field) << std::endl;
-   
-      } catch (...) {
-        std::cout << 100 << std::endl;
+      if (model == "LB") {
+        // create calculator object
+	LbFunctionalCalculator calculator(tau, gamma);
+
+	// create minimizer object
+	BpgMinimizer<LbFunctionalCalculator> minimizer(errorTol, maxIter);
+
+	// minimize field, print result (if success) or '100' (if failure)
+	try {
+	  minimizer.minimize(*field, calculator);
+	  std::cout << calculator.f(*field) << std::endl;
+	} catch (...) {
+	  std::cout << 100 << std::endl;
+	}
+      
+      } else if (model == "OK") {
+        // create calculator object
+	OkFunctionalCalculator calculator(tau, gamma);
+
+	// create minimizer object
+	BpgMinimizer<OkFunctionalCalculator> minimizer(errorTol, maxIter);
+
+	// minimize field, print result (if success) or '100' (if failure)
+	try {
+	  minimizer.minimize(*field, calculator);
+	  std::cout << calculator.f(*field) << std::endl;
+	} catch (...) {
+	  std::cout << 100 << std::endl;
+	}
+
+      } else if (model == "PW") {
+        // read remaining input params
+	double lam1 = otherParams[2];
+	double lam2 = otherParams[3];
+
+	// create calculator object
+	PwFunctionalCalculator calculator(tau, gamma, lam1, lam2);
+
+	/*
+	// create list of q-values
+	std::vector<double> q;
+	double dq = 1e-2;
+	int N = 401;
+	for (int index = 0; index < N; index++) {
+	  q.push_back(dq * index);
+	  std::cout << index << ": " << dq * index << std::endl;
+	}
+	*/
+
+	// create minimizer object
+	BpgMinimizer<PwFunctionalCalculator> minimizer(errorTol, maxIter);
+
+	// minimize field, print result (if success) or '100' (if failure)
+	try {
+	  minimizer.minimize(*field, calculator);
+	  std::cout << calculator.f(*field) << std::endl;
+	} catch (...) {
+	  std::cout << 100 << std::endl;
+	}
+
       } 
 
+      // timing stuff:
       /*
       auto end = std::chrono::steady_clock::now();
       std::cout << "elapsed time: " 
 	        << std::chrono::duration_cast<std::chrono::seconds>(end - start).count()
 		<< std::endl;                                                                 
 		*/
+      
       // reset initial condition
       provider.resetCondition(*field);
 
     } // end loop over phase points
     
+    // clear FieldProvider object for this phase
     delete(field);
-  } // end loop over phases
 
+  } // end loop over phases
+  
   return 0;
 }
+
+/*
+ * ======================================================
+ *            method to parse input files
+ * ======================================================
+ *
+ *   method takes string, divides it into words 
+ *   (separated by spaces) and returns a vector of 
+ *   those words 
+ *
+ */
+
+std::vector<std::string> divideWords(std::string str)
+{
+  using namespace std;
+  string w = "";  // current word
+  vector<string> strVec;
+
+  // parse each char in the string:
+  for (auto c : str)
+  {
+    // if we've found a space, divide the sentence here
+    if (c == ' ') {
+      strVec.push_back(w);
+      w = "";
+    // otherwise add character to current word
+    } else {
+      w = w + c;
+    }
+  }
+  strVec.push_back(w);
+  return strVec;
+}
+
