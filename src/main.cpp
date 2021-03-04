@@ -15,8 +15,6 @@
 #include "FieldProvider.h"
 #include "GenericProvider.h"
 
-#include "LbFunctionalCalculator.h"
-#include "OkFunctionalCalculator.h"
 #include "PwFunctionalCalculator.h"
 
 std::vector<std::string> divideWords(std::string str);
@@ -116,7 +114,7 @@ int main(int argc, char** argv)
     while (std::getline(inFile,line)) 
     {
       std::vector<std::string> brokenLine = divideWords(line);
-      if ((int) brokenLine.size() != paramNumber) {
+      if ((int) brokenLine.size() < paramNumber) {
         std::cout << "invalid parameter file for " << model << " model, file must provide " << paramNumber << " input params per line" << std::endl;
         return 1;
       }
@@ -183,15 +181,13 @@ int main(int argc, char** argv)
 	for (size_t index = 0; index < dividedInput.size(); index++) {
           std::stringstream stream(dividedInput[index]);
 	  
-	  if (stream >> x) {
-	    if (n < paramNumber) {
+	  if (stream >> x && n < paramNumber) {
 	      otherParams.push_back(x);
 	      n++;
-	    } 
-	  
 	  } 
-	}
-
+	} // end loop over input pts.
+	
+	// if we have enough params we can stop waiting for user input
 	if (n == paramNumber)
           break;
       }
@@ -234,12 +230,30 @@ int main(int argc, char** argv)
         return 1;
       }
       std::cin.clear();
+      // let the user know we are starting the calculation
+      std::cout << "starting calculation" << std::endl;
 
     } else {
       for (int p = (3 + paramNumber); p < argc; p++)
         phaseIdList.push_back(std::atoi(argv[p]));
     }
   } // end inMode = 2 case
+
+  /*
+   * ==============================================================================
+   *            Start optimization for all points listed in input
+   * ==============================================================================
+   */
+
+  // minimization parameters (max iterations and error tolerance)
+  const double errorTol = 1e-8;
+  const int    maxIter  = 15;
+  
+  // create minimizer object 
+  BpgMinimizer<PwFunctionalCalculator> minimizer(errorTol, maxIter);
+
+  // ensure we don't print more digits of precion than we know (based on errorTol):
+  std::cout << std::fixed << std::setprecision(8);
 
   // loop through phases
   for (std::vector<int>::const_iterator idIter = phaseIdList.begin(); idIter != phaseIdList.end(); idIter++) { 
@@ -260,87 +274,44 @@ int main(int argc, char** argv)
       double tau   = otherParams[0];
       double gamma = otherParams[1];
 
-      // minimization parameters - used for all models
-      double errorTol = 1e-8;
-      int    maxIter  = 15;
-      // ensure we don't print more digits of precision than we know:
-      std::cout << std::fixed;
-      std::cout << std::setprecision(8);
-
-      // code timing stuff
-      // auto start = std::chrono::steady_clock::now();
-
-      // this part depends on the choice of model
-      
+      // get lam1 and lam2 values
+      double lam1 = 0.0, lam2 = 0.0;
       if (model == "LB") {
-        // create calculator object
-	LbFunctionalCalculator calculator(tau, gamma);
+        lam1 = 0.0;
+	lam2 = 0.0;
 
-	// create minimizer object
-	BpgMinimizer<LbFunctionalCalculator> minimizer(errorTol, maxIter);
-
-	// minimize field, print result (if success) or '100' (if failure)
-	try {
-	  minimizer.minimize(*field, calculator);
-	  std::cout << calculator.f(*field) << std::endl;
-	} catch (...) {
-	  std::cout << 100 << std::endl;
-	}
-      
       } else if (model == "OK") {
-        // create calculator object
-	OkFunctionalCalculator calculator(tau, gamma);
-
-	// create minimizer object
-	BpgMinimizer<OkFunctionalCalculator> minimizer(errorTol, maxIter);
-
-	// minimize field, print result (if success) or '100' (if failure)
-	try {
-	  minimizer.minimize(*field, calculator);
-	  std::cout << calculator.f(*field) << std::endl;
-	} catch (...) {
-	  std::cout << 100 << std::endl;
-	}
+        lam1 = 1.0;
+	lam2 = 1.0;
 
       } else if (model == "PW") {
-        // read remaining input params
-	double lam1 = otherParams[2];
-	double lam2 = otherParams[3];
+        lam1 = otherParams[2];
+	lam2 = otherParams[3];
+      }
 
-	// create calculator object
-	PwFunctionalCalculator calculator(tau, gamma, lam1, lam2);
-
-	/*
-	// create list of q-values
-	std::vector<double> q;
-	double dq = 1e-2;
-	int N = 401;
-	for (int index = 0; index < N; index++) {
-	  q.push_back(dq * index);
-	  std::cout << index << ": " << dq * index << std::endl;
-	}
-	*/
-
-	// create minimizer object
-	BpgMinimizer<PwFunctionalCalculator> minimizer(errorTol, maxIter);
-
-	// minimize field, print result (if success) or '100' (if failure)
-	try {
-	  minimizer.minimize(*field, calculator);
-	  std::cout << calculator.f(*field) << std::endl;
-	} catch (...) {
-	  std::cout << 100 << std::endl;
-	}
-
-      } 
-
-      // timing stuff:
+      // create calculator object
+      PwFunctionalCalculator calculator(tau, gamma, lam1, lam2);
+       
       /*
+      // timing stuff - start clock
+      auto start = std::chrono::steady_clock::now();
+      */
+
+      // minimize field, print result (if success) or '100' (if failure)
+      try {
+	minimizer.minimize(*field, calculator);
+	std::cout << calculator.f(*field) << std::endl;
+      } catch (...) {
+	std::cout << 100 << std::endl;
+      }
+      
+      /*
+      // timing stuff - finish up:
       auto end = std::chrono::steady_clock::now();
       std::cout << "elapsed time: " 
-	        << std::chrono::duration_cast<std::chrono::seconds>(end - start).count()
-		<< std::endl;                                                                 
-		*/
+                << std::chrono::duration_cast<std::chrono::seconds>(end - start).count()
+                << std::endl;                                                                 
+      */
       
       // reset initial condition
       provider.resetCondition(*field);
