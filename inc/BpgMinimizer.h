@@ -71,15 +71,10 @@ public:
       // increment iterator
       m_iterator++;
 
-      //std::cout << std::endl << "starting iteration " << m_iterator << std::endl;
 
-      //std::cout << "free-energy before opt. " << fNew << std::endl;
-
-      //std::cout << "optimizing field" << std::endl;
       // optimize field (fixed period)
       optimizeField(field, calculator);
       
-      //std::cout << "optimizing period" << std::endl;
       // optimize period (fixed densities)
       optimizePeriods(field, calculator);
 
@@ -89,13 +84,10 @@ public:
 
       // update error
       currentError = fNew - fOld;
-      //std::cout << "free-energy after optimization " << fNew << std::endl;
-      //std::cout << "current error " << currentError << std::endl;
 
       // update stop criterion
       if (std::abs(currentError) < m_errorTolerance || m_iterator == m_maxIterations)
         stopCriterion = true;
-
     }
     
     /*
@@ -142,9 +134,9 @@ public:
     
     // first need to make new grid sizes and spacings arrays - these are copied from initial field 
     int*    nestGridSizes = (int*)    malloc(d * sizeof(int));
-    double* nestDq	  = (double*) malloc(d * sizeof(double));
+    double* nestDq	      = (double*) malloc(d * sizeof(double));
     memcpy(nestGridSizes, gridSizes, d * sizeof(int));	// memcpy(dest, src, size)
-    memcpy(nestDq,	  dq,	     d * sizeof(double));
+    memcpy(nestDq,	      dq,	       d * sizeof(double));
 
     // create field
     FieldProvider nestField(
@@ -194,6 +186,30 @@ public:
 
 
     /*
+     * ============ timestep (ts) field initialization =============
+     */
+
+    // make new grid sizes/spacing arrays
+    int*    tsGridSizes = (int*)    malloc(d * sizeof(int));
+    double* tsDq        = (double*) malloc(d * sizeof(double));
+    memcpy(tsGridSizes, gridSizes, d * sizeof(int));
+    memcpy(tsDq,        dq,        d * sizeof(double));
+
+    // create field provider
+    FieldProvider tsField(
+        cplxFieldData,
+        d,
+        tsGridSizes,
+        tsDq,
+        false,
+        phaseID);
+
+    // get pointers to ts field
+    fftw_complex* realTsData = tsField.getRealDataPointer();
+    fftw_complex* cplxTsData = tsField.getCplxDataPointer();
+
+
+    /*
      * ================= Quadratic coefficients ===================
      */
 
@@ -210,8 +226,12 @@ public:
     double fNew = calculator.f(cplxFieldData, realFieldData, laplacian, N);
     double fOld = 0.0;
 
-    // timestep
-    const double tStep = 0.1;
+    // initial timestep and adaptive timestep params
+    const double tMax = 2.0;
+    double tMin = 0.1;
+    const double delta = 0.001;
+    const double rho   = 0.5 * (std::sqrt(5) - 1);
+    double tStep;
     
     // Nesterov step variables
     double theta = 1.0;
@@ -227,30 +247,70 @@ public:
      * ====================== while loop ==========================  
      */
     
-    while(!stopCriterion)
+    while (!stopCriterion)
     {
       // increment iterator
       m_fieldIterator++;
 
+      // estimate timestep
+      tStep = tMax;
+
+      if (m_fieldIterator % 100 == 0)
+        tMin *= 0.1;
+      
+      bool tsStopCriterion = false;
+      while (!tsStopCriterion)
+      {
+        // update ts field
+        for (int i = 0; i < N; i++) {
+          // matrix element for update step
+          double A = 1.0 - tStep * laplacian[i] * Gamma[i];
+
+          // update ts field
+          cplxTsData[i][0] = (cplxNestData[i][0] + tStep * laplacian[i] * cplxNlDerivData[i][0]) / A;
+          cplxTsData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivData[i][1]) / A;
+        }
+        
+        // fourier transform ts field
+        tsField.transformC2R();
+
+        // compute quantities needed for test
+        double tsMinusNest = 0.0;
+        for (int i = 0; i < N; i++) 
+          tsMinusNest += (realTsData[i][0] - realNestData[i][0]) * (realTsData[i][0] - realNestData[i][0]);
+
+        // compute Nl free-energies:
+        double fNlNest  = calculator.fNL(realNestData,  N);
+        double fNlTs    = calculator.fNL(realTsData,    N);
+        
+        // test inequalities:
+        double inequality = fNlNest  - fNlTs - delta * tsMinusNest;
+
+        // update timestep
+        if (inequality <= 0 && tStep > tMin)
+          tStep *= rho;
+        else
+          tsStopCriterion = true; 
+      }
+      // verify timestep is between min and max bounds
+      if (tStep > tMax) tStep = tMax;
+      if (tStep < tMin) tStep = tMin;
+
       // update field
       for (int i = 0; i < N; i++) {
-	// nl derivative field - real and imaginary parts
-        double cplxNlDerivReVal = cplxNlDerivData[i][0];
-	double cplxNlDerivImVal = cplxNlDerivData[i][1];
+        // matrix element for update step
+        double A = 1.0 - tStep * laplacian[i] * Gamma[i];
 
-	// matrix element for update step
-	double A = 1.0 - tStep * laplacian[i] * Gamma[i];
+        // store old field vals
+        double cplxFieldOldReVal = cplxFieldData[i][0];
+        double cplxFieldOldImVal = cplxFieldData[i][1];
 
-	// store old field vals
-	double cplxFieldOldReVal = cplxFieldData[i][0];
-	double cplxFieldOldImVal = cplxFieldData[i][1];
+        // update real and imaginary parts of field
+        cplxFieldData[i][0] = (cplxNestData[i][0] + tStep * laplacian[i] * cplxNlDerivData[i][0]) / A;
+	      cplxFieldData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivData[i][1]) / A;
 
-	// update real and imaginary parts of field
-	cplxFieldData[i][0] = (cplxNestData[i][0] + tStep * laplacian[i] * cplxNlDerivReVal) / A;
-	cplxFieldData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivImVal) / A;
-
-	// update Nesterov field
-	cplxNestData[i][0] = (1.0 + beta) * cplxFieldData[i][0] - beta * cplxFieldOldReVal;
+        // update Nesterov field
+        cplxNestData[i][0] = (1.0 + beta) * cplxFieldData[i][0] - beta * cplxFieldOldReVal;
         cplxNestData[i][1] = (1.0 + beta) * cplxFieldData[i][1] - beta * cplxFieldOldImVal;	
       }
 
@@ -268,8 +328,7 @@ public:
       currentError = fOld - fNew;
 
       // update Nesterov coefficient - use test to damp oscillations
-      if (currentError < 0)
-        theta = 1.0;
+      if (currentError < 0) theta = 1.0;
       double theta2   = theta * theta;
       double newTheta = -0.5 * theta2 + std::sqrt(0.25 * theta2 * theta2 + theta2);
       beta = theta * (1 - theta) / (theta2 + newTheta);
@@ -292,6 +351,7 @@ public:
     // free laplacian and quad coefficent arrays
     free(laplacian);
     free(Gamma);  
+
   } // end of field optimization method
 
 
