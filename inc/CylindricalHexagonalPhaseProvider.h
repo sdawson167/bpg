@@ -16,6 +16,14 @@ private:
     const int m_dimension = 2;
     const int m_phaseID = 3;
 
+    // range of tau values for which phase will "definitely" converge
+    const double m_tauMin = -0.4;
+    const double m_tauMax = -0.01;
+
+    // range of gamma values for which phase will "definitely" converge
+    const double m_gammaMin = 0.0;
+    const double m_gammaMax = 1.8;
+
     typedef std::vector<int>    intPoint;                                      	
     typedef std::tuple<intPoint, double> point;
     point makePoint(intPoint coords, double amp) { return point(coords, amp); }
@@ -42,6 +50,12 @@ public:
     {
       return Phase::hex;
     }
+
+    double getTauMin() { return m_tauMin; }       
+    double getTauMax() { return m_tauMax; }
+    
+    double getGammaMin() { return m_gammaMin; }
+    double getGammaMax() { return m_gammaMax; }
 
     /*
      * ======================================

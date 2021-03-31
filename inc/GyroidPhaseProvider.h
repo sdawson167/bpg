@@ -16,6 +16,14 @@ private:
     const int m_dimension = 3;
     const int m_phaseID = 2;
 
+    // range of tau values for which newly initialized phase will "definitely" converge
+    const double m_tauMin = -0.4;
+    const double m_tauMax = -0.15;
+
+    // range of gamma values for which newly initialized phase will "definitely" converge
+    const double m_gammaMin = 0.1;
+    const double m_gammaMax = 1.0;
+
 public:
     GyroidPhaseProvider(double period, double avDensity, double amplitude)
       : m_period{ period },

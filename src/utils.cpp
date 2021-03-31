@@ -48,7 +48,7 @@ std::vector<std::string> divideWords(std::string str)
  * =================================================================
  */
 
-void parseInputArgs(int argc, char** argv, int &inMode, paramList &phasePoints, std::vector<int> &phaseIDList)
+void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<int> &phaseIDList, bool &resetFlag)
 {
   using namespace std;
 
@@ -75,21 +75,22 @@ void parseInputArgs(int argc, char** argv, int &inMode, paramList &phasePoints, 
   else if (model == "OK") paramNumber = 2; // OK model: tau, gamma
   else if (model == "PW") paramNumber = 4; // PW model: tau, gamma, lam1, lam2
                                                                                                                                                      
-  // determine form of input arguments - input file (1) or command line (2):
+  // determine form of input arguments - input file (1), command line (2), fixed tau (3) or fixed gamma (4):
   
   // form of input should be entered as second argument:
+  int inMode = 0;
   if (argc > 2) inMode = atoi(argv[2]);
   
   // if not, allow user to enter choice:
   else
   {
     string input;
-    cout << "choose input mode: 1 (input file), 2 (command line input), 3 (bdry mode)" << endl;
+    cout << "choose input mode: 1 (input file), 2 (command line input), 3 (fixed tau bdry mode), 4 (fixed gamma bdry mode)" << endl;
     getline(cin, input);
     
     stringstream stream(input);
     if (!(stream >> inMode)) {
-      string message =  "second input arg is invalid - choose 1, 2, or 3";
+      string message =  "second input arg is invalid - choose 1, 2, 3 or 4";
       cin.clear();
       throw message;
     }
@@ -98,16 +99,17 @@ void parseInputArgs(int argc, char** argv, int &inMode, paramList &phasePoints, 
   }
 
   // verify choice of input mode is valid
-  if (inMode != 1 && inMode != 2 && inMode != 3) {
-    string message =  "second input arg is invalid - choose 1, 2, or 3";
+  if (inMode != 1 && inMode != 2 && inMode != 3 && inMode != 4) {
+    string message =  "second input arg is invalid - choose 1, 2, 3 or 4";
     throw message;
   }
-                                                                                                                                                     
+  
   /* initialize params from remaining input arguments
    * how we do this depends on choice of input mode:
    * 	1 (input file) - need name of file from cmd line
    * 	2 (command line) - need remaining params from cmd line
-   * 	3 (bdry mode) - need remaining params from cmd line
+   * 	3 (bdry mode, fixed tau) - need remaining params from cmd line
+   * 	4 (bdry mode, fixed gamma) - " " 
    */
   
   // use this to determine if phaseIDs were included as command line args
@@ -172,14 +174,33 @@ void parseInputArgs(int argc, char** argv, int &inMode, paramList &phasePoints, 
 
       phasePoints.push_back(otherParams);
     }
+
+    // set reset flag value
+    if (argc < 5) {
+      cout << "Reset initial condition between runs? Choose 1 (yes) or 0 (no)" << endl; 
+      
+      string input;
+      getline(cin, input);
+      stringstream stream(input);
+      if (!(stream >> resetFlag)) {
+        cin.clear();
+        throw "invalid selection for resetFlag";
+      }
+
+    } else {
+      resetFlag = (bool) atoi(argv[4]);    
+    }
     
-    // if argc < 5 - need to request phaseIDs from user
-    phaseIDargNo = 5; 
+    // if argc < 6 - need to request phaseIDs from user
+    phaseIDargNo = 6; 
 
   // end inMode = 1 case 
                                                                                                                                                      
   // inMode = 2: read input params (tau, gamma, ...) and list of phaseIDs from command line:
   } else if (inMode == 2) {
+
+    // resetFlag is always true in this case
+    resetFlag = 1;
     
     // first, get input params (tau, gamma, ...):
     param otherParams;
@@ -240,9 +261,11 @@ void parseInputArgs(int argc, char** argv, int &inMode, paramList &phasePoints, 
   
   // end inMode = 2 case
 
-  // inMode = 3 : bdry mode 
+  // inMode = 3 : bdry mode with fixed tau val. 
   } else if (inMode == 3) {
-    
+    // resetFlag is always false in this case
+    resetFlag = 0;
+
     // get fixed tau val
     double tau;
 
@@ -376,8 +399,149 @@ void parseInputArgs(int argc, char** argv, int &inMode, paramList &phasePoints, 
     // if argc < 5 + paramNumber - need to request phaseIDs from user
     phaseIDargNo = 5 + paramNumber;
 
-  } // end inMode = 3 case
+  // end inMode = 3 case
   
+  // inMode = 4 : bdry mode with fixed gamma  val. 
+  } else if (inMode == 4) {
+    // resetFlag is always false in this case
+    resetFlag = 0;
+
+    // get range of tau values
+    double tau1 = 0.0;
+    double tau2 = 0.0;
+    
+    // if parameters are not provided, allow user to enter them:
+    if (argc < 5 ) {
+      cout << "choose start and end vals of tau:" << endl;
+      
+      double x;
+      string input;
+      int n = 0;
+      while (getline(cin, input)) {
+        
+        vector<string> dividedInput = divideWords(input);
+                                                                                                     
+        for (size_t index = 0; index < dividedInput.size(); index++) {
+          stringstream stream(dividedInput[index]);
+    
+          if (stream >> x && n < 2) {
+            if (n == 0)
+              tau1 = x;
+            if (n == 1)
+              tau2 = x;
+            n++;
+          } 
+        } // end loop over input pts.
+                                                                                                     
+        // if we have enough params we can stop waiting for user input
+        if (n >= 2)
+          break;
+                                                                                                     
+      } // end input while loop
+      cin.clear();
+    
+    // otherwise read parameters from command line args:
+    } else {
+      tau1 = atof(argv[3]);
+      tau2 = atof(argv[4]);
+    }
+
+    // get fixed gamma val
+    double gamma;
+                                                             
+    // if tau val not provided - allow user to enter it
+    if (argc < 6) {
+      cout << "choose gamma value" << endl;
+      string input;
+      getline(cin, input);
+                                                             
+      stringstream stream(input);
+      if (!(stream >> gamma)) {
+        string message = "invalid choice for tau parameter";
+        cin.clear();
+        throw message;
+      }
+                                                             
+    } else {
+      gamma = atof(argv[5]);
+    }
+
+    // get lam1 and lam2 vals
+    double lam1 = 0.0;
+    double lam2 = 0.0;
+    if (model == "OK") {
+      lam1 = 1.0;
+      lam2 = 1.0;
+    }
+
+    if (model == "PW") {
+      // if parameters are not provided, allow user to enter them:
+      if (argc < 8) {
+        cout << "choose lam1 and lam2 values" << endl;
+        
+        double x;
+        string input;
+        int n = 0;
+        while (getline(cin, input)) {
+          
+          vector<string> dividedInput = divideWords(input);
+                                                                                                       
+          for (size_t index = 0; index < dividedInput.size(); index++) {
+            stringstream stream(dividedInput[index]);
+      
+            if (stream >> x && n < 2) {
+              if (n == 0)
+                lam1 = x;
+              if (n == 1)
+                lam2 = x;
+              n++;
+            } 
+          } // end loop over input pts.
+                                                                                                       
+          // if we have enough params we can stop waiting for user input
+          if (n >= 2)
+            break;
+                                                                                                       
+        } // end input while loop
+        cin.clear();
+      
+      // otherwise read parameters from command line args:
+      } else {
+        lam1 = atof(argv[6]);
+        lam2 = atof(argv[7]);
+      }
+    }
+
+    // create range of gamma values - add (tau, gamma, lam1, lam2) lists to
+    // paramlist vector 
+    const double dTau = 0.01;
+
+    int reverseFlag = tau1 < tau2 ? 1 : -1;
+    int nTau = (int) (abs(tau2 - tau1) / dTau);
+    
+    for (int i = 0; i < nTau; i++) {
+      param otherParams;
+
+      // compute tau value and add:
+      double tau = tau1 + i * reverseFlag * dTau;
+      otherParams.push_back(tau);
+
+      // add gamma value. 
+      otherParams.push_back(gamma);
+
+      // add lam1 and lam2 vals to param list:
+      otherParams.push_back(lam1);
+      otherParams.push_back(lam2);
+       
+      // add point to list of phasePoints
+      phasePoints.push_back(otherParams);
+    }
+     
+    // if argc < 5 + paramNumber - need to request phaseIDs from user
+    phaseIDargNo = 5 + paramNumber;
+
+  } // end inMode = 4 case
+
  // now get phaseIDs - list of phases to optimize:
  if (argc <  phaseIDargNo) {
    cout << "choose phases (1 - 7) to optimize, enter any non-numerical character to finish:" << endl;
@@ -409,9 +573,85 @@ void parseInputArgs(int argc, char** argv, int &inMode, paramList &phasePoints, 
      throw message;
    }
    cin.clear();
+
+   cout << "starting optimization" << endl;
                                                                                                             
  } else {
    for (int p = (phaseIDargNo - 1); p < argc; p++) 
      phaseIDList.push_back(atoi(argv[p])); // end parseInputArgs method 
  }
 }
+
+/*
+ * ================================================================================
+ *       determine whether (tau, gamma) is in stable region of phase 
+ * ================================================================================
+ */
+/*
+ * void pointInStableRegion(int phaseID, double &tauMin, double &tauMax, double &gammaMin, double &gammaMax)
+{
+  switch(phaseID) {
+    case 1: { // lam
+	      tauMin   = -0.4;
+	      tauMax   = -0.01;
+              gammaMin = 0.0;
+	      gammaMax = 0.25; 
+    }
+    case 2: { // gyr
+	      tauMin   = -0.4;
+	      tauMax   = -0.1;
+              gammaMin = 0.05;
+	      gammaMax = 0.75; 
+    }
+    case 3: { // hex
+	      tauMin   = -0.35;
+	      tauMax   = -0.05;
+              gammaMin = 0.05;
+	      gammaMax = 1.5; 
+    }
+    case 4: { // bcc
+	      tauMin   = -0.4;
+	      tauMax   = 0.05;
+              gammaMin = 0.7;
+	      gammaMax = 1.5; 
+    }
+    case 5: { // fcc
+	      tauMin   = -0.4;
+	      tauMax   = 0.1;
+              gammaMin = 1.0;
+	      gammaMax = 2.0; 
+    }
+    case 6: { // a15
+	      tauMin   = -0.4;
+	      tauMax   = 0.0;
+              gammaMin = 1.0;
+	      gammaMax = 1.5; 
+    }
+    case 7: { // sig
+	      tauMin   = -0.4;
+	      tauMax   = 0.0;
+              gammaMin = 1.0;
+	      gammaMax = 2.0; 
+    }
+    case 8: { // c14
+	      tauMin   = 0.0;
+	      tauMax   = 0.0;
+              gammaMin = 0.0;
+	      gammaMax = 0.0; 
+    }
+    case 9: { // c15
+	      tauMin   = 0.0;
+	      tauMax   = 0.0;
+              gammaMin = 0.0;
+	      gammaMax = 0.0; 
+    }
+    default: { // disordered
+	      tauMin   = -0.4;
+	      tauMax   = 0.4;
+              gammaMin = 0.0;
+	      gammaMax = 2.0; 
+    }
+  } // end switch
+}
+*/
+

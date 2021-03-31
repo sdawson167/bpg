@@ -22,8 +22,8 @@ class BpgMinimizer {
 private:
   double m_errorTolerance;	// used for convergence test
   int	 m_maxIterations;	// used to limit total no. of iterations
-  int    m_maxFieldIterations  = 1000; // max iterations of field opt. algorithm
-  int    m_maxPeriodIterations = 1000; // max iterations of period opt. algorithm
+  int    m_maxFieldIterations  = 10000; // max iterations of field opt. algorithm
+  int    m_maxPeriodIterations = 200;   // max iterations of period opt. algorithm
   int 	 m_iterator;		// used to track total iterations (alternating field/period optimization)
   int 	 m_fieldIterator;	// used to track no. of iterations of field minimization alg.
   int	 m_periodIterator;	// used to track no. of iterations of period optimization alg.
@@ -94,8 +94,10 @@ public:
      * ==================== finish up ============================
      */
 
-    if (m_iterator == m_maxIterations)
-      throw std::runtime_error("maximum iterations reached");
+    if (m_iterator == m_maxIterations) {
+      std::string message = "maximum iterations reached";
+      throw message;
+    }
       
   } // end minimize method
 
@@ -345,8 +347,10 @@ public:
      */
 
     // if we've reached the max no. of iterations, throw an error
-    if (m_fieldIterator == m_maxFieldIterations)
-      throw std::runtime_error("maximum iterations reached in field optimization");
+    if (m_fieldIterator == m_maxFieldIterations) {
+      std::string message = "Maximum iterations reached in field optimization";
+      throw message;
+    }
 
     // free laplacian and quad coefficent arrays
     free(laplacian);
@@ -465,8 +469,10 @@ public:
     } // end while loop
 
     // if we've reached maximum iterations throw an error
-    if (m_periodIterator == m_maxPeriodIterations)
-      throw std::runtime_error("maximum iterations reached in period optimization");
+    if (m_periodIterator == m_maxPeriodIterations) {
+      std::string message = "Maximum iterations reached in period optimization";
+      throw message;
+    }
 
     // repackage reciprocal lattice vector b into format that field-provider likes
     double* newDq = (double*) malloc(d * sizeof(double));

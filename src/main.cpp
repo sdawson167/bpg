@@ -25,13 +25,13 @@ int main(int argc, char** argv)
    * ===============================================================================
    */
   
-  int inMode;
   paramList phasePoints;
   std::vector<int> phaseIDList;
+  bool resetFlag = 1;
 
   // attempt to extract list of calculations to perform 
   try {
-    parseInputArgs(argc, argv, inMode, phasePoints, phaseIDList);
+    parseInputArgs(argc, argv, phasePoints, phaseIDList, resetFlag);
 
   } catch (std::string errorMessage){
     std::cout << errorMessage << std::endl;
@@ -46,10 +46,10 @@ int main(int argc, char** argv)
 
   // minimization parameters (max iterations and error tolerance)
   const double errorTol = 1e-9;
-  const int    maxIter  = 15;
+  const int    maxIter  = 20;
   
   // ensure we don't print more digits of precion than we know (based on errorTol):
-  std::cout << std::fixed << std::setprecision(8);
+  std::cout << std::fixed << std::setprecision(10);
 
   // create minimizer (object that handles implementation of minimization algorithm) 
   BpgMinimizer<PwFunctionalCalculator> minimizer(errorTol, maxIter);
@@ -64,6 +64,9 @@ int main(int argc, char** argv)
     // initialize field-provider in chosen phase
     GenericPhaseProvider provider(phaseID); 
     FieldProvider *field = provider.generateInitialCondition();
+
+    // flag used to track if phase was freshly initialized: 
+    bool reset = true;
 
     // loop through phase points (tau, gamma, ... vals) - compute free-energy at each point
     for (paramList::const_iterator it = phasePoints.begin(); it != phasePoints.end(); it++)
@@ -80,18 +83,59 @@ int main(int argc, char** argv)
       // create 'functional calculator' object - handles free-energy calculations
       PwFunctionalCalculator calculator(tau, gamma, lam1, lam2);
 
-      // minimize field, print result (if success) or '100' (if failure)
+      // flag use to track if we should reset the phase between points:
+      bool movingResetFlag = resetFlag;
+
+      // minimize field, print result (if success) or error message (if failure)
+      auto start = std::chrono::steady_clock::now();
       try {
         minimizer.minimize(*field, calculator);
-        std::cout << calculator.f(*field) << std::endl;
-      } catch (...) {
-        std::cout << 100 << std::endl;
+	
+        // if we succeed - print free-energy:
+        std::cout << tau << ", " << gamma << ", " << calculator.f(*field) << std::endl;
+
+	// we can use this phase for the next loop
+	reset = false;
+      
+      // if we fail:	
+      } catch (std::string errorMessage) {
+ 	
+	// if we didn't start with a freshly initialized phase, try resetting and minimizing again:
+        if (!reset) {
+	  provider.resetCondition(*field);
+	  reset = true;
+	  
+	  try {
+	    minimizer.minimize(*field, calculator);
+
+	    // if we succeed - print free-energy:
+	    std::cout << tau << ", " << gamma << ", " << calculator.f(*field) << std::endl;
+
+	    // we can use this phase for the next loop
+	    reset = false;
+
+	  } catch (std::string errorMessage) { 
+	    // if we fail the second time, give up on this point
+	    std::cout << tau << ", " << gamma << ", " << errorMessage << std::endl;
+	    
+	    // need to reset before the next loop
+	    movingResetFlag = true;
+	  }
+        } // end second chance
+
+	// if we initialized the phase at the beginning of the loop there's nothing to do 
+	// except give up on this point :(
+	else  
+          std::cout << tau << ", " << gamma << ", " << errorMessage << std::endl;
+	
       }
+      auto end = std::chrono::steady_clock::now();
+      //std::cout << ", time: " << std::chrono::duration_cast<std::chrono::seconds>(end-start).count() << std::endl;
 
       // reset initial condition
-      if (inMode == 1 || inMode == 2) {
-        std::cout << "resetting provider" << std::endl;
+      if (movingResetFlag) { 
         provider.resetCondition(*field);
+	reset = true;
       }
 
     } // end loop over phase points
