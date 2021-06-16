@@ -270,7 +270,7 @@ public:
 
           // update ts field
           cplxTsData[i][0] = (cplxNestData[i][0] + tStep * laplacian[i] * cplxNlDerivData[i][0]) / A;
-          cplxTsData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivData[i][1]) / A;
+          cplxTsData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivData[i][1]) / A * 0;
         }
         
         // fourier transform ts field
@@ -309,7 +309,7 @@ public:
 
         // update real and imaginary parts of field
         cplxFieldData[i][0] = (cplxNestData[i][0] + tStep * laplacian[i] * cplxNlDerivData[i][0]) / A;
-	      cplxFieldData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivData[i][1]) / A;
+	cplxFieldData[i][1] = (cplxNestData[i][1] + tStep * laplacian[i] * cplxNlDerivData[i][1]) / A * 0;
 
         // update Nesterov field
         cplxNestData[i][0] = (1.0 + beta) * cplxFieldData[i][0] - beta * cplxFieldOldReVal;

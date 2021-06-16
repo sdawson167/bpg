@@ -25,4 +25,3 @@ obj/%.o: src/%.cpp Makefile
 	$(CXX) $(CXX_FLAGS) $(INCLUDE) -MMD -MP -c -o $@ $<
 
 
-

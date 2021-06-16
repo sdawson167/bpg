@@ -20,4 +20,6 @@ void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<i
 // method to determine whether (tau, gamma) point is in stable region for phase (phaseID)
 //void pointInStableRegion(int phaseID, double &tauMin, double &tauMax, double &gammaMin, double &gammaMax)
 
+// method to choose starting gamma val for horizontal sweeps
+double getGamma0(int phaseID);
 #endif

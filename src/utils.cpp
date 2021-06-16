@@ -582,76 +582,16 @@ void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<i
  }
 }
 
-/*
- * ================================================================================
- *       determine whether (tau, gamma) is in stable region of phase 
- * ================================================================================
- */
-/*
- * void pointInStableRegion(int phaseID, double &tauMin, double &tauMax, double &gammaMin, double &gammaMax)
-{
-  switch(phaseID) {
-    case 1: { // lam
-	      tauMin   = -0.4;
-	      tauMax   = -0.01;
-              gammaMin = 0.0;
-	      gammaMax = 0.25; 
-    }
-    case 2: { // gyr
-	      tauMin   = -0.4;
-	      tauMax   = -0.1;
-              gammaMin = 0.05;
-	      gammaMax = 0.75; 
-    }
-    case 3: { // hex
-	      tauMin   = -0.35;
-	      tauMax   = -0.05;
-              gammaMin = 0.05;
-	      gammaMax = 1.5; 
-    }
-    case 4: { // bcc
-	      tauMin   = -0.4;
-	      tauMax   = 0.05;
-              gammaMin = 0.7;
-	      gammaMax = 1.5; 
-    }
-    case 5: { // fcc
-	      tauMin   = -0.4;
-	      tauMax   = 0.1;
-              gammaMin = 1.0;
-	      gammaMax = 2.0; 
-    }
-    case 6: { // a15
-	      tauMin   = -0.4;
-	      tauMax   = 0.0;
-              gammaMin = 1.0;
-	      gammaMax = 1.5; 
-    }
-    case 7: { // sig
-	      tauMin   = -0.4;
-	      tauMax   = 0.0;
-              gammaMin = 1.0;
-	      gammaMax = 2.0; 
-    }
-    case 8: { // c14
-	      tauMin   = 0.0;
-	      tauMax   = 0.0;
-              gammaMin = 0.0;
-	      gammaMax = 0.0; 
-    }
-    case 9: { // c15
-	      tauMin   = 0.0;
-	      tauMax   = 0.0;
-              gammaMin = 0.0;
-	      gammaMax = 0.0; 
-    }
-    default: { // disordered
-	      tauMin   = -0.4;
-	      tauMax   = 0.4;
-              gammaMin = 0.0;
-	      gammaMax = 2.0; 
-    }
-  } // end switch
-}
-*/
+double getGamma0(int phaseID) {
+  double gamma0 = 0.0;
 
+  if (phaseID == 4) gamma0 = 2.0;
+ 
+  if (phaseID == 5) gamma0 = 2.0;
+
+  if (phaseID == 6) gamma0 = 2.0; 
+
+  if (phaseID == 7) gamma0 = 2.0;
+
+  return gamma0;
+}

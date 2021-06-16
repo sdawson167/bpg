@@ -25,6 +25,10 @@ private:
     const double m_a15Period  = 2 * sqrt(5) * M_PI;
     const double m_sigPeriodX = 8.88 * M_PI;
     const double m_sigPeriodZ = 4.54 * M_PI;
+    const double m_c14PeriodX = 5 * M_PI;
+    const double m_c14PeriodY = sqrt(3) * m_c14PeriodX;
+    const double m_c14PeriodZ = 1.6 * m_c14PeriodX;
+    const double m_c15Period  = 15.0;
 
     int stringToPhaseID(std::string phaseID) {
       if      (phaseID == "lam") {
@@ -47,6 +51,12 @@ private:
       }
       else if (phaseID == "sig") {
         return 7;
+      }
+      else if (phaseID == "c14") {
+        return 8;
+      }
+      else if (phaseID == "c15") {
+        return 9;
       }
       else {
         return 0;

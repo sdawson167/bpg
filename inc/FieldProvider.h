@@ -167,6 +167,8 @@ public:
     void transformC2R() {
       memcpy(m_cplxTemp, m_cplxData, sizeof(fftw_complex) * m_numFieldElements);
       fftw_execute(m_fieldPlanC2R);
+      for (int i = 0; i < m_numFieldElements; i++)
+        m_realData[i][1] = 0.0;
     }
 
     /*

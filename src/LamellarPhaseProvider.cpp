@@ -68,6 +68,7 @@ void LamellarPhaseProvider::populateDataArray(double* dqVec, fftw_complex* data,
   }
 
   // initialize lamellar phase - 1D cosine function
-  data[0][0] = m_avDensity;
-  data[1][0] = m_amplitude;
+  data[0][0]                = 0.0;
+  data[1][0]                = 0.5;
+  data[numFieldElements-1][0] = 0.5; 
 }
