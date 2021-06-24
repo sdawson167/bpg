@@ -15,7 +15,7 @@ std::vector<std::string> divideWords(std::string str);
 // minimize)
 typedef std::vector<double> param;  
 typedef std::vector<param> paramList;
-void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<int> &phaseIDList, bool &resetFlag);
+void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<int> &phaseIDList, bool &resetFlag, std::string &model);
 
 // method to determine whether (tau, gamma) point is in stable region for phase (phaseID)
 //void pointInStableRegion(int phaseID, double &tauMin, double &tauMax, double &gammaMin, double &gammaMax)

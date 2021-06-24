@@ -22,8 +22,8 @@ class BpgMinimizer {
 private:
   double m_errorTolerance;	// used for convergence test
   int	 m_maxIterations;	// used to limit total no. of iterations
-  int    m_maxFieldIterations  = 10000; // max iterations of field opt. algorithm
-  int    m_maxPeriodIterations = 200;   // max iterations of period opt. algorithm
+  int    m_maxFieldIterations  = 750; // max iterations of field opt. algorithm
+  int    m_maxPeriodIterations = 500;   // max iterations of period opt. algorithm
   int 	 m_iterator;		// used to track total iterations (alternating field/period optimization)
   int 	 m_fieldIterator;	// used to track no. of iterations of field minimization alg.
   int	 m_periodIterator;	// used to track no. of iterations of period optimization alg.
@@ -70,13 +70,15 @@ public:
     {
       // increment iterator
       m_iterator++;
-
+      std::cout << std::endl << "iteration no. " << m_iterator << std::endl;
 
       // optimize field (fixed period)
       optimizeField(field, calculator);
+      std::cout << "free energy after field opt. " << calculator.f(field) << std::endl;
       
       // optimize period (fixed densities)
       optimizePeriods(field, calculator);
+      std::cout << "free energy after period opt. " << calculator.f(field) << std::endl;
 
       // recompute free-energy
       fOld = fNew;
@@ -191,6 +193,7 @@ public:
      * ============ timestep (ts) field initialization =============
      */
 
+    /*
     // make new grid sizes/spacing arrays
     int*    tsGridSizes = (int*)    malloc(d * sizeof(int));
     double* tsDq        = (double*) malloc(d * sizeof(double));
@@ -209,7 +212,7 @@ public:
     // get pointers to ts field
     fftw_complex* realTsData = tsField.getRealDataPointer();
     fftw_complex* cplxTsData = tsField.getCplxDataPointer();
-
+    */
 
     /*
      * ================= Quadratic coefficients ===================
@@ -229,11 +232,11 @@ public:
     double fOld = 0.0;
 
     // initial timestep and adaptive timestep params
-    const double tMax = 2.0;
-    double tMin = 0.1;
-    const double delta = 0.001;
-    const double rho   = 0.5 * (std::sqrt(5) - 1);
-    double tStep;
+    // const double tMax = 2.0;
+    // double tMin = 0.05;
+    // const double delta = 0.001;
+    // const double rho   = 0.5 * (std::sqrt(5) - 1);
+    double tStep = 0.1;
     
     // Nesterov step variables
     double theta = 1.0;
@@ -256,10 +259,11 @@ public:
 
       // estimate timestep
       tStep = tMax;
+      if (m_fieldIterator > 250)
+      	tMin = 0.01;
+      if (m_fieldIterator > 500)
+        tMin = 0.001;
 
-      if (m_fieldIterator % 100 == 0)
-        tMin *= 0.1;
-      
       bool tsStopCriterion = false;
       while (!tsStopCriterion)
       {
@@ -339,6 +343,8 @@ public:
       // update stop criterion
       if (m_fieldIterator == m_maxFieldIterations || std::abs(currentError) < m_errorTolerance)
         stopCriterion = true;
+
+      std::cout << "iteration no. " << m_fieldIterator << ", current error " << currentError << ", current timestep " << tStep << std::endl;
 
     } // end of while loop
 

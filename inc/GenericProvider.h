@@ -28,7 +28,7 @@ private:
     const double m_c14PeriodX = 5 * M_PI;
     const double m_c14PeriodY = sqrt(3) * m_c14PeriodX;
     const double m_c14PeriodZ = 1.6 * m_c14PeriodX;
-    const double m_c15Period  = 15.0;
+    const double m_c15Period  = 21;
 
     int stringToPhaseID(std::string phaseID) {
       if      (phaseID == "lam") {

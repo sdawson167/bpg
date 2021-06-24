@@ -7,6 +7,8 @@
 #include "FccPhaseProvider.h"
 #include "A15PhaseProvider.h"
 #include "SigmaPhaseProvider.h"
+#include "C14PhaseProvider.h"
+#include "C15PhaseProvider.h"
 
 
 FieldProvider* GenericPhaseProvider::generateInitialCondition()
@@ -45,6 +47,16 @@ FieldProvider* GenericPhaseProvider::generateInitialCondition()
     case 7: {
       SigmaPhaseProvider sigProvider{ m_sigPeriodX, m_sigPeriodZ, m_avgDensity, m_amplitude};
       FieldProvider* initialFieldProvider = new FieldProvider(sigProvider.generateInitialCondition(64));
+      return initialFieldProvider;
+    }
+    case 8: {
+      C14PhaseProvider c14Provider{ m_c14PeriodX, m_c14PeriodY, m_c14PeriodZ, m_avgDensity, m_amplitude};
+      FieldProvider* initialFieldProvider = new FieldProvider(c14Provider.generateInitialCondition(64));
+      return initialFieldProvider;
+    }
+    case 9: {
+      C15PhaseProvider c15Provider{ m_c15Period, m_avgDensity, m_amplitude};
+      FieldProvider* initialFieldProvider = new FieldProvider(c15Provider.generateInitialCondition(64));
       return initialFieldProvider;
     }
     default: {  // dis
@@ -106,6 +118,16 @@ void GenericPhaseProvider::resetCondition(FieldProvider &field)
     case 7: {
       SigmaPhaseProvider sigProvider{ m_sigPeriodX, m_sigPeriodZ, m_avgDensity, m_amplitude };
       sigProvider.resetCondition(field);
+      break;
+    }
+    case 8: {
+      C14PhaseProvider c14Provider{ m_c14PeriodX, m_c14PeriodY, m_c14PeriodZ, m_avgDensity, m_amplitude };
+      c14Provider.resetCondition(field);
+      break;
+    }
+    case 9: {
+      C15PhaseProvider c15Provider{ m_c15Period, m_avgDensity, m_amplitude };
+      c15Provider.resetCondition(field);
       break;
     }
     default: {

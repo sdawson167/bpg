@@ -48,14 +48,13 @@ std::vector<std::string> divideWords(std::string str)
  * =================================================================
  */
 
-void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<int> &phaseIDList, bool &resetFlag)
+void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<int> &phaseIDList, bool &resetFlag, std::string &model)
 {
   using namespace std;
 
   // choose model - LB, OK, PW
   
   // if model is not chosen as input arg, give user option to enter it:
-  string model;
   if (argc > 1) model = argv[1];
   else {
     cout << "choose model: LB, OK, or PW" << endl;
@@ -544,7 +543,7 @@ void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<i
 
  // now get phaseIDs - list of phases to optimize:
  if (argc <  phaseIDargNo) {
-   cout << "choose phases (1 - 7) to optimize, enter any non-numerical character to finish:" << endl;
+   cout << "choose phases (1 - 9) to optimize, enter any non-numerical character to finish:" << endl;
    
    int phaseID;
    string input;
@@ -557,7 +556,7 @@ void parseInputArgs(int argc, char** argv, paramList &phasePoints, std::vector<i
        stringstream stream(dividedInput[index]);
                                                                                                             
        if (stream >> phaseID) {
-         if (phaseID > 0 && phaseID < 8)
+         if (phaseID > 0 && phaseID < 10)
            phaseIDList.push_back(phaseID);
        } else 
          readInFlag = false;
